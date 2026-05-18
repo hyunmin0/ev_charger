@@ -1,5 +1,5 @@
 create table users (
-	user_id uuid primary key DEFAULT gen_random_uuid(),
+	userid uuid primary key DEFAULT gen_random_uuid(),
 	nickname varchar(50) not null,
 	profile varchar(512),
 	email varchar(255) check(email like '%@%'),
@@ -18,15 +18,15 @@ CREATE TABLE mycar(
 );
 CREATE TABLE favorite(
 	userid UUID NOT NULL,
-	statid int NOT NULL,
+	statId int NOT NULL,
 	created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	PRIMARY KEY (userid, statid),
+	PRIMARY KEY (userid, statId),
 	FOREIGN KEY (userid) REFERENCES users (userid) ON DELETE CASCADE,
-	FOREIGN KEY (statid) REFERENCES station(statid) ON DELETE CASCADE
+	FOREIGN KEY (statId) REFERENCES station(statId) ON DELETE CASCADE
 );
 create table station (
 	statNm varchar(100) not null,
-	statid int primary key,
+	statId int primary key,
 	addr varchar(150) not null,
 	addrDetail varchar(200) not null,
 	location geography(point, 4326) not null,
@@ -45,10 +45,10 @@ create table station (
 	floorType varchar(2) check (floorType in ('F', 'B'))
 );
 CREATE TABLE charger(
-	statid int NOT NULL,
-	chgerid varchar(2) NOT NULL,
-	chgertype varchar(2) check (
-		chgertype in (
+	statId int NOT NULL,
+	chgerId varchar(2) NOT NULL,
+	chgerType varchar(2) check (
+		chgerType in (
 			'01',
 			'02',
 			'03',
@@ -65,8 +65,8 @@ CREATE TABLE charger(
 	statUpdDt varchar(14),
 	lastTsdt varchar(14),
 	lastTedt varchar(14),
-	output INTEGER,
+	output INTEGER check (output in (3, 7, 50, 100, 200)),
 	method varchar(10) check(method in ('단독', '동시')),
-	PRIMARY KEY (statid, chgerid),
-	FOREIGN KEY (statid) REFERENCES station(statid) ON DELETE CASCADE
+	PRIMARY KEY (statId, chgerId),
+	FOREIGN KEY (statId) REFERENCES station(statId) ON DELETE CASCADE
 );
