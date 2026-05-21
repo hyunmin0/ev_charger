@@ -1,13 +1,20 @@
 CREATE EXTENSION postgis;
+create table profile_image (
+	id int generated always as identity primary key,
+	image_url varchar(512) not null unique,
+	name varchar(50) not null unique
+);
 create table users (
 	userid uuid primary key DEFAULT gen_random_uuid(),
 	nickname varchar(50) not null,
-	profile varchar(512),
+	profile_image_id int,
 	email varchar(255) check(email like '%@%'),
 	provider varchar(20) not null check (provider in ('kakao', 'google')),
 	provider_id varchar(255) not null,
 	refresh_token varchar(512),
-	unique(provider, provider_id)
+	unique(provider, provider_id),
+	foreign key (profile_image_id) references profile_image(id) on delete
+	set null
 );
 CREATE TABLE user_car(
 	carid UUID NOT NULL DEFAULT gen_random_uuid(),
