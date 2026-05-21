@@ -1,6 +1,7 @@
-package ev_charger.be.domain;
+package ev_charger.be.user.car;
 
 
+import ev_charger.be.user.User;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -16,16 +17,24 @@ import java.util.UUID;
 public class UserCar {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID carid;
+    private UUID carId;
 
-    private UUID userid;
+    @JoinColumn(name="user_id", nullable = false)
+    @ManyToOne(fetch=FetchType.LAZY)
+    private User user;
+
+    @Column(nullable = false, unique = true)
     private String model;
+
+    @Column(name="battery_capacity", nullable = false)
     private float batteryCapacity;
 
     @Builder
-    public UserCar(UUID userid, String model, float batteryCapacity) {
-        this.userid = userid;
+    public UserCar(User user, String model, float batteryCapacity) {
+        this.user = user;
         this.model = model;
         this.batteryCapacity = batteryCapacity;
     }
+
+
 }

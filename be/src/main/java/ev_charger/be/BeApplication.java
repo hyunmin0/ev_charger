@@ -2,7 +2,9 @@ package ev_charger.be;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 
+@EnableJpaAuditing // 자동으로 시간 측정
 @SpringBootApplication
 public class BeApplication {
 

@@ -1,6 +1,5 @@
-package ev_charger.be.repository;
+package ev_charger.be.favorite;
 
-import ev_charger.be.domain.Favorite;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -17,6 +16,4 @@ public interface FavoriteRepository extends JpaRepository<Favorite, Long> {
 
     void deleteByUseridAndStatId(UUID userid, int statId);
 
-
-    //
 }

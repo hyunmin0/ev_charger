@@ -1,6 +1,5 @@
-package ev_charger.be.repository;
+package ev_charger.be.user.car;
 
-import ev_charger.be.domain.UserCar;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

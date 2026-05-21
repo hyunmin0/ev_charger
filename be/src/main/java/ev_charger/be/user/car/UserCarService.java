@@ -1,7 +1,6 @@
-package ev_charger.be.service;
+package ev_charger.be.user.car;
 
-import ev_charger.be.dto.UserCarDto;
-import ev_charger.be.repository.UserCarRepository;
+import ev_charger.be.user.car.dto.response.UserCarResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -21,10 +20,9 @@ public class UserCarService {
     }
 
     // 차 목록
-    public List<UserCarDto.ListResponse> getUserCarList() {
+    public List<UserCarResponse> getUserCarList() {
          // jwt에서 userid 가져와서 db에서 리스트업
         // return model, batterCapacity, carid(차 삭제할 때 필요)
-            // 이를 ListResponse(........)라는 하나의 record로 만들어 놓음
     }
 
     // 차 삭제

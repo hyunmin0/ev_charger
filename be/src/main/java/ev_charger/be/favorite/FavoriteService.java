@@ -1,6 +1,5 @@
-package ev_charger.be.service;
+package ev_charger.be.favorite;
 
-import ev_charger.be.repository.FavoriteRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
