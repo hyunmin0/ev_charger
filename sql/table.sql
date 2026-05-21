@@ -1,3 +1,4 @@
+CREATE EXTENSION postgis;
 create table users (
 	userid uuid primary key DEFAULT gen_random_uuid(),
 	nickname varchar(50) not null,
@@ -16,37 +17,28 @@ CREATE TABLE user_car(
 	PRIMARY KEY (carid),
 	FOREIGN KEY (userid) REFERENCES users (userid) ON DELETE cascade
 );
-CREATE TABLE favorite(
-	id BIGINT generated always as identity primary key,
-	userid UUID NOT NULL,
-	statId int NOT NULL,
-	created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	unique (userid, statId),
-	FOREIGN KEY (userid) REFERENCES users (userid) ON DELETE CASCADE,
-	FOREIGN KEY (statId) REFERENCES station(statId) ON DELETE CASCADE
-);
 create table station (
 	statNm varchar(100) not null,
-	statId int primary key,
+	statId varchar(8) primary key,
 	addr varchar(150) not null,
-	addrDetail varchar(200) not null,
+	addrDetail varchar(200),
 	location geography(point, 4326) not null,
 	useTime varchar(50) not null,
 	busiNm varchar(50) not null,
 	busiCall varchar(20) not null,
-	zcode int not null,
-	zscode int,
+	zcode varchar(2) not null,
+	zscode varchar(5),
 	kind varchar(2),
 	kindDetail varchar(4),
 	parkingFree varchar(1) check(parkingFree in ('Y', 'N')),
 	note varchar(200),
 	limitYn varchar(1) not null check (limitYn in ('Y', 'N')),
 	limitDetail varchar(100),
-	floorNum int,
+	floorNum varchar(50),
 	floorType varchar(2) check (floorType in ('F', 'B'))
 );
 CREATE TABLE charger(
-	statId int NOT NULL,
+	statId varchar(8) NOT NULL,
 	chgerId varchar(2) NOT NULL,
 	chgerType varchar(2) not null check (
 		chgerType in (
@@ -63,11 +55,21 @@ CREATE TABLE charger(
 		)
 	),
 	stat varchar(1) not null check (stat in ('0', '1', '2', '3', '4', '5')),
-	statUpdDt not null varchar(14),
+	statUpdDt varchar(14) not null,
 	lastTsdt varchar(14),
 	lastTedt varchar(14),
-	output INTEGER check (output in (3, 7, 50, 100, 200)),
+	output varchar(20) check (output in ('3', '7', '50', '100', '200')),
 	method varchar(10) check(method in ('단독', '동시')),
 	PRIMARY KEY (statId, chgerId),
 	FOREIGN KEY (statId) REFERENCES station(statId) ON DELETE CASCADE
 );
+CREATE TABLE favorite(
+	id BIGINT generated always as identity primary key,
+	userid UUID NOT NULL,
+	statId varchar(8) NOT NULL,
+	created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	unique (userid, statId),
+	FOREIGN KEY (userid) REFERENCES users (userid) ON DELETE CASCADE,
+	FOREIGN KEY (statId) REFERENCES station(statId) ON DELETE CASCADE
+);
+create index idx_station_location on station using gist(location);
