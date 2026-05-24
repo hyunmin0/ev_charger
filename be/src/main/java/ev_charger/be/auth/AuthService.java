@@ -1,13 +1,14 @@
 package ev_charger.be.auth;
 
 import ev_charger.be.auth.dto.response.SocialLoginResponse;
+import ev_charger.be.user.Provider;
 
 import java.util.Map;
 
 public class AuthService {
 
     // 회원가입, 로그인
-    public SocialLoginResponse socialLogin(String accessToken, String provider) {
+    public SocialLoginResponse socialLogin(String accessToken, Provider provider) {
         /**
          1. 카카오/구글 api 호출 - 정보 조회
          2. providerId로 db에 있는지 확인

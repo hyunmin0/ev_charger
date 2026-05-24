@@ -12,8 +12,8 @@ public interface UserCarRepository extends JpaRepository<UserCar, UUID> {
     // findByCarid() == findById()이며 findById()는 jpa가 제공함
         // Id == PK
 
-    List<UserCar> findByUserid(UUID userid);
-    Optional<UserCar> deleteByCarid(UUID carid);
+    List<UserCar> findByUserId(UUID userId);
+    Optional<UserCar> deleteByCarId(UUID carId);
 }
 
 

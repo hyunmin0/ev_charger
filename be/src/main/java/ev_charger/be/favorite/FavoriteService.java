@@ -12,7 +12,7 @@ public class FavoriteService {
     public void addFavorite(int statId) {
         // statId가 station 테이블에 존재하는지 검증
         // statId가 user의 favorite에 있는지 확인
-        // userid, statId 저장
+        // userId, statId 저장
     }
 
     public void deleteFavorite(int statId) {
@@ -21,7 +21,7 @@ public class FavoriteService {
     }
 
     public  List</**레코드만들기**/> getFavoriteList() {
-        // userid로 favorite 조회
+        // userId로 favorite 조회
         // 위의 결과 중 stateId와 station 테이블을 조인
         // 이름
         // 리뷰수

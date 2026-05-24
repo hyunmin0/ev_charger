@@ -9,11 +9,11 @@ import java.util.UUID;
 @Repository
 public interface FavoriteRepository extends JpaRepository<Favorite, Long> {
 
-    List<Favorite> findByUserid(UUID userid);
+    List<Favorite> findByUserId(UUID userId);
 
     // 즐겨찾기 내에 해당 충전소 존재 여부
-    boolean existsByUseridAndStatId(UUID userid, int statId);
+    boolean existsByUserIdAndStatId(UUID userId, int statId);
 
-    void deleteByUseridAndStatId(UUID userid, int statId);
+    void deleteByUserIdAndStatId(UUID userId, int statId);
 
 }

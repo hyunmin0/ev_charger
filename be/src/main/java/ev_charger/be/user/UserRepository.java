@@ -7,9 +7,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface UserRepository extends JpaRepository<Member, UUID> {
+public interface UserRepository extends JpaRepository<User, UUID> {
 
-    Optional<Member> findByProviderAndProviderId(String provider, String providerId);
-    Optional<Member> findByRefreshToken(String refreshToken);
+    Optional<User> findByProviderAndProviderId(Provider provider, String providerId);
+    Optional<User> findByRefreshToken(String refreshToken);
 
 }

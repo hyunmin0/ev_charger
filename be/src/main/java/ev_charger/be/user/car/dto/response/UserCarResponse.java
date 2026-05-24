@@ -8,7 +8,7 @@ import java.util.UUID;
 @Builder
 @Getter
 public record UserCarResponse(
-        UUID carid,
+        UUID carId,
         String model,
         float batteryCapacity
 ) {}

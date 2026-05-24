@@ -9,8 +9,6 @@ import org.springframework.stereotype.Service;
 public class UserService {
     private final UserRepository userRepository;
 
-
-
     // 닉네임 수정
     public void updateNickname(String newName) {
     }
