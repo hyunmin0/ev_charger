@@ -1,6 +1,8 @@
 package ev_charger.be.auth;
 
 import ev_charger.be.auth.dto.response.SocialLoginResponse;
+import ev_charger.be.auth.client.KakaoApiClient;
+import ev_charger.be.security.JwtProvider;
 import ev_charger.be.user.Provider;
 import ev_charger.be.user.User;
 import ev_charger.be.user.UserRepository;
@@ -32,7 +34,7 @@ public class AuthService {
             user.updateRefreshToken(newRefreshToken); // DB에 새 refreshToken 저장
             userRepository.save(user); // DB에 저장 
 
-            return SocialLoginResponse.builder() //sucess랑 토큰 2개 반환
+            return SocialLoginResponse.builder() //success랑 토큰 2개 반환
                     .status("success")
                     .accessToken(newAccessToken)
                     .refreshToken(newRefreshToken)

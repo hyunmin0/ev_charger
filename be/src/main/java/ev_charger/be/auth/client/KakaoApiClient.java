@@ -1,4 +1,4 @@
-package ev_charger.be.auth;
+package ev_charger.be.auth.client;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
