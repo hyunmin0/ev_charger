@@ -9,3 +9,11 @@ spring:
       ddl-auto: update
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     show-sql: true
+
+  kakao:
+    api-url: https://kapi.kakao.com/v2/user/me
+
+  jwt:
+    secret: "secret: evchargerprojectjwtsecretkey2026springbootlogin"
+    access-token-expiration: 3600000
+    refresh-token-expiration: 1209600000

@@ -39,7 +39,7 @@ create table station (
 	kindDetail varchar(4),
 	parkingFree varchar(1) check(parkingFree in ('Y', 'N')),
 	note varchar(200),
-	limitYn varchar(1) not null check (limitYn in ('Y', 'N')),
+	limitYn varchar(1) check (limitYn in ('Y', 'N')),
 	limitDetail varchar(100),
 	floorNum varchar(50),
 	floorType varchar(2) check (floorType in ('F', 'B'))
