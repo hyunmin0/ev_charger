@@ -66,7 +66,7 @@ CREATE TABLE charger(
 	statUpdDt char(14) not null,
 	lastTsdt char(14),
 	lastTedt char(14),
-	output varchar(20) check (output in ('3', '7', '50', '100', '200')),
+	output varchar(20),
 	method varchar(10) check(method in ('단독', '동시')),
 	PRIMARY KEY (statId, chgerId),
 	FOREIGN KEY (statId) REFERENCES station(statId) ON DELETE CASCADE

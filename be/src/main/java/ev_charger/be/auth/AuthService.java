@@ -9,6 +9,9 @@ import org.springframework.stereotype.Service;
 
 import java.util.Map;
 import java.util.Optional;
+
+import static ev_charger.be.user.Provider.KAKAO;
+
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -19,7 +22,7 @@ public class AuthService {
     // 회원가입, 로그인
     public SocialLoginResponse socialLogin(String accessToken, Provider provider) {
         KakaoApiClient.KakaoUserInfo kakaoUser = kakaoApiClient.getUserInfo(accessToken); // 카카오에서 유저 정보 받아오기 id, email, nickname
-        Optional<User>existing = userRepository.findByProviderAndProviderId(provider, KAKAO, kakaoUer.id()) //우리 DB에 이 사람이 이미 있는지 확인 provider랑 카카오에서 받은 id 조합으로 찾음
+        Optional<User>existing = userRepository.findByProviderAndProviderId(provider, KAKAO, kakaoUser.id()) //우리 DB에 이 사람이 이미 있는지 확인 provider랑 카카오에서 받은 id 조합으로 찾음
         if (existing.isPresent()){ // DB에 있으면 기존유저 없으면 신규유저
             //기존 유저
             User user = existing.get();
@@ -29,7 +32,7 @@ public class AuthService {
             user.updateRefreshToken(newRefreshToken); // DB에 새 refreshToken 저장
             userRepository.save(user); // DB에 저장 
 
-            return SocialLoginRespone.builder() //sucess랑 토큰 2개 반환
+            return SocialLoginResponse.builder() //sucess랑 토큰 2개 반환
                     .status("success")
                     .accessToken(newAccessToken)
                     .refreshToken(newRefreshToken)
