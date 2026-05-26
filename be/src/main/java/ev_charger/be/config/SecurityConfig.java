@@ -1,6 +1,7 @@
-package ev_charger.be.security;
+package ev_charger.be.config;
 // spring security 전체 설정 담당
 
+import ev_charger.be.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

@@ -98,14 +98,26 @@ public class JwtProvider {
         }
     }
 
+    public long getAccessExpiration(String token) {
+        return Jwts.parser()
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .getExpiration()
+                .getTime() - System.currentTimeMillis(); // 만료 시각 - 지금 시각
+    }
+
+
     /**
      * jwt에서 userId 추출
      * @param token jwt
      * @return 사용자 UUID
      */
     public UUID extractUserId(String token) {
-        // jwt 내부의 payload 가져오기
-        String subject = Jwts.parser()
+
+        // String -> UUID 변환
+        return UUID.fromString(Jwts.parser() // jwt 내부의 payload 가져오기
                 // 검증 키
                 .verifyWith(Keys.hmacShaKeyFor(secret.getBytes()))
                 // parser 생성
@@ -115,9 +127,6 @@ public class JwtProvider {
                 // payload 접근
                 .getPayload()
                 // subject 값 추출
-                .getSubject();
-
-        // String -> UUID 변환
-        return UUID.fromString(subject);
+                .getSubject());
     }
 }

@@ -1,5 +1,7 @@
 package ev_charger.be.auth.client;
 
+import ev_charger.be.auth.dto.response.UserInfo;
+import ev_charger.be.user.Provider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -11,12 +13,13 @@ import org.springframework.web.client.RestTemplate;
 import java.util.Map;
 
 @Component
-public class KakaoApiClient {
+public class KakaoApiClient implements OAuthApiClient{
 
     @Value("${kakao.api-url}")  //yml에서 kakao.api-url 값을 읽어옴
     private String apiUrl;
 
-    public KakaoUserInfo getUserInfo(String accessToken) {
+    @Override
+    public UserInfo getUserInfo(String accessToken) {
 
         RestTemplate restTemplate = new RestTemplate();
 
@@ -37,8 +40,10 @@ public class KakaoApiClient {
         Map profile = (Map) kakaoAccount.get("profile");
         String nickname = (String) profile.get("nickname");
 
-        return new KakaoUserInfo(id, email, nickname);
+        return new UserInfo(id, email, nickname);
     }
 
-    public record KakaoUserInfo(String id, String email, String nickname) {} //카카오에서 받은 유저 정보를 담는 클래스 데이터만 담음
+    @Override
+    public Provider getProvider() { return Provider.KAKAO; }
+
 }
