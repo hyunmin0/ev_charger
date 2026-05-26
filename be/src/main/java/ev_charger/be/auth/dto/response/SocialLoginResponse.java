@@ -7,7 +7,7 @@ import lombok.Getter;
 @Getter
 public class SocialLoginResponse {
     private String status; // SUCCESS / NEED_PROFILE_SELECT
-    private String jwtAccessToken;
-    private String jwtRefreshToken;
+    private String accessToken;
+    private String refreshToken;
     private String tempToken;
 }
