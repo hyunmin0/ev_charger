@@ -1,18 +1,21 @@
 package ev_charger.be.auth;
 
 import ev_charger.be.auth.client.OAuthApiClient;
+import ev_charger.be.auth.dto.request.RegisterRequest;
 import ev_charger.be.auth.dto.response.ReissueResponse;
 import ev_charger.be.auth.dto.response.SocialLoginResponse;
-import ev_charger.be.auth.client.KakaoApiClient;
 import ev_charger.be.auth.dto.response.UserInfo;
 import ev_charger.be.security.JwtProvider;
 import ev_charger.be.user.Provider;
 import ev_charger.be.user.User;
 import ev_charger.be.user.UserRepository;
+import ev_charger.be.user.profileImage.ProfileImage;
+import ev_charger.be.user.profileImage.ProfileImageRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 import java.util.Optional;
@@ -25,6 +28,8 @@ public class AuthService {
     private final JwtProvider jwtProvider; // JWT 토큰 생성 및 검증
     private final UserRepository userRepository; // DB에서 유저 찾기
     private final RedisTemplate<String, String> redisTemplate;
+    private final ObjectMapper objectMapper;
+    private final ProfileImageRepository profileImageRepository;
 
 
     /**
@@ -53,21 +58,73 @@ public class AuthService {
 
             user.updateRefreshToken(newRefreshToken); // DB에 새 refreshToken 저장
 
-            return SocialLoginResponse.builder() // SUCCESS랑 토큰 2개 반환
-                    .status("SUCCESS")
-                    .accessToken(newAccessToken)
-                    .refreshToken(newRefreshToken)
-                    .build();
+            // SUCCESS랑 토큰 2개 반환
+            return new SocialLoginResponse("SUCCESS", newAccessToken, newRefreshToken, null);
 
         } else {
             // 신규유저
-            // 닉네임을 아직 설정 안했으니까 프로필 설정이 필요하다고 알려주고
-            // 임시 토큰으로 카카오id를 그냥 사용
-            return SocialLoginResponse.builder()
-                    .status("NEED_PROFILE_SELECT")
-                    .tempToken(userInfo.id())
-                    .build();
+            // 닉네임을 아직 설정 안했으니까 프로필 설정이 필요하다고 알려줌
+            // 임시 토큰: "provider:providerId"
+            String tempToken = provider + ":"+ userInfo.id();
+            // email이 없으면 "" 입력
+            String emailValue = userInfo.email() != null ? userInfo.email() : "";
+            // redis에 임시 토큰 저장(키: temp:provider:providerId, 값: emailValue, TTL: 30분) - json 형태
+            redisTemplate.opsForValue().set("temp:" + tempToken, emailValue, 30, TimeUnit.MINUTES);
+            return new SocialLoginResponse("NEED_PROFILE_SELECT", null, null, tempToken);
         }
+    }
+
+    /**
+     * 회원가입(db에 저장)
+     * @param registerRequest tempToken, nickname, profileimage
+     * @return succss, accessToken, refreshToken
+     */
+    @Transactional
+    public SocialLoginResponse register(RegisterRequest registerRequest) {
+        // tempToken, email 추출
+        String redisKey = "temp:" + registerRequest.tempToken();
+
+        // redis에 있는지 검증
+        if(Boolean.FALSE.equals(redisTemplate.hasKey(redisKey))) {
+            throw new IllegalArgumentException("유효하지 않은 temToken");
+        }
+
+        // email 값 추출
+        // 키: temp:tempToken 값: emailValue
+        String email = redisTemplate.opsForValue().get(redisKey);
+        // email이 없으면 null
+        String emailToSave = (email == null || email.isEmpty()) ? null : email;
+
+        // tempToken -> provider, providerId 추출(e.g. "KAKAO:1234")
+        String[] parts = registerRequest.tempToken().split(":", 2);
+        Provider provider = Provider.valueOf(parts[0]);
+        String providerId = parts[1];
+
+        // profileImage 조회
+        ProfileImage profileImage = profileImageRepository.findById(registerRequest.profileImageId())
+                .orElseThrow(()-> new IllegalArgumentException("존재하지 않는 프로필 이미지"));
+
+        // db에 user 저장
+        User user = User.builder()
+                .nickname(registerRequest.nickname())
+                .profileImage(profileImage)
+                .email(emailToSave)
+                .provider(provider)
+                .providerId(providerId)
+                .build();
+        // uuid가 생성되기 위해서는 @Transactional로는 안됨. save() 필요
+        userRepository.save(user);
+
+        // 토큰 발급
+        String accessToken = jwtProvider.generateAccessToken(user.getUserId());
+        String refreshToken = jwtProvider.generateRefreshToken(user.getUserId());
+        // db refreshToken 업데이트
+        user.updateRefreshToken(refreshToken);
+
+        // redis temp키 삭제
+        redisTemplate.delete(redisKey);
+
+        return new SocialLoginResponse("SUCCESS",accessToken,refreshToken,null);
     }
 
     /**

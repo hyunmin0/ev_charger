@@ -1,0 +1,6 @@
+package ev_charger.be.auth.dto.response;
+
+import ev_charger.be.user.Provider;
+
+public record TempUserInfo(Provider provider, String providerId, String email) {
+}

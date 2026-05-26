@@ -15,7 +15,7 @@ public class ProfileImage {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private int id;
+    private Integer id;
     private String imageUrl;
     private String name;
 

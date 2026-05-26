@@ -50,8 +50,12 @@ public class User {
     }
 
 
-public void updateRefreshToken(String refreshToken){
+    public void updateRefreshToken(String refreshToken){
     this.refreshToken = refreshToken;
 }
+
+    public void updateNickname(String newName) { this.nickname = newName; }
+
+    public void updateProfileImage(ProfileImage newProfileImage) {this.profileImage = newProfileImage; }
 
 }
