@@ -29,7 +29,7 @@ public class AuthService {
             //기존 유저
             User user = existing.get();
             String newAccessToken = jwtProvider.generateAccessToken(user.getUserId()); //JWT 토큰 새로 발급
-            String newRefreshToken = jwtProvider.generateRefreshToken();
+            String newRefreshToken = jwtProvider.generateRefreshToken(user.getUserId());
             
             user.updateRefreshToken(newRefreshToken); // DB에 새 refreshToken 저장
             userRepository.save(user); // DB에 저장 

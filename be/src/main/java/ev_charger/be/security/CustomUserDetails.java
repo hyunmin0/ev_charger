@@ -1,5 +1,35 @@
 package ev_charger.be.security;
 //로그인된 사용자 정보 객체
 
-public class CustomUserDetails {
+import ev_charger.be.user.User;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+
+import java.util.Collection;
+import java.util.List;
+
+@RequiredArgsConstructor
+public class CustomUserDetails implements UserDetails {
+    private final User user;
+
+    // 권한 목록
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        // ROLE_USER: 일반 유저
+        // 이후에 권한 추가
+        return List.of(new SimpleGrantedAuthority("ROLE_USER"));
+    }
+
+    // Spring Security 식별자로 userId 사용
+    @Override
+    public String getUsername() {
+        return user.getUserId().toString();
+    }
+
+    @Override
+    public String getPassword() {
+        return "";
+    }
 }

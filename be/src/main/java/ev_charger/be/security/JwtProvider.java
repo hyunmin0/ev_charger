@@ -45,17 +45,18 @@ public class JwtProvider {
                 .subject(userId.toString())
                 // 토큰 만료 시간
                 .expiration(new Date(System.currentTimeMillis() + accessExpiration))
-                // jwt 서명
+                // 서명
                 .signWith(Keys.hmacShaKeyFor(secret.getBytes()))
-                // 최종 jwt 문자열 생성
+                // jwt 생성
                 .compact();
     }
 
 
-    public String generateRefreshToken(/*UUID userId*/) {
+    public String generateRefreshToken(UUID userId) {
         return Jwts.builder()
-                /* 누구의 refreshToken인지 저장 */
-                // 만료 시간
+                // 사용자 식별값 저장
+                .subject(userId.toString())
+                // 토큰 만료 시간
                 .expiration(new Date(System.currentTimeMillis() + refreshExpiration))
                 // 서명
                 .signWith(Keys.hmacShaKeyFor(secret.getBytes()))
