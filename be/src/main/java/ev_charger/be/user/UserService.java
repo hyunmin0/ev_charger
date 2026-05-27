@@ -1,28 +1,62 @@
 package ev_charger.be.user;
 
-import ev_charger.be.user.dto.response.MemberResponse;
+import ev_charger.be.user.car.UserCarRepository;
+import ev_charger.be.user.dto.response.UserResponse;
+import ev_charger.be.user.profileImage.ProfileImage;
+import ev_charger.be.user.profileImage.ProfileImageRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly=true) // 조회를 기본값으로(메모리 사용 감소 등 최적화)
 public class UserService {
-    private final UserRepository userRepository;
+    private final ProfileImageRepository profileImageRepository;
+    private final UserCarRepository userCarRepository;
 
-    // 닉네임 수정
-    public void updateNickname(String newName) {
+    /**
+     * 닉네임 수정
+     * @param user
+     * @param newName
+     */
+    @Transactional
+    public void updateNickname(User user, String newName) {
+        user.updateNickname(newName);
     }
 
-    // 사진 수정 ****=> 수정하기*******
-    public String updateProfile(int profileImageId) {
+    /**
+     * 프로필 사진 수정
+     * @param user
+     * @param newProfileImageId 업데이트할 이미지 id
+     * @return 수정된 사진 url
+     */
+    @Transactional
+    public String updateProfileImage(User user, Integer newProfileImageId) {
         // profileimage에 해당 id가 있는지 확인
-        // users.profileImageId에 저장 후 url 값 반환
+        ProfileImage profileImage = profileImageRepository.findById(newProfileImageId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 프로필 이미지"));
+
+        // users.profileImage 업데이트
+        user.updateProfileImage(profileImage);
+
+        // url 반환
+        return profileImage.getImageUrl();
+
     }
 
-    public MemberResponse getProfile() {
-        // users: nickname, email(있으면)
-        // profileImage: users의 profileImageId의 imageUrl
-        // usercar: model
+    /**
+     * 프로필 조회
+     * @param user
+     * @return nickname, email(없으면 null), profileImageUrl(없으면 null), model(없으면 빈 리스트)
+     */
+    public UserResponse getProfile(User user) {
+        return new UserResponse(
+                user.getNickname(),
+                user.getEmail(),
+                user.getProfileImage() != null ? user.getProfileImage().getImageUrl():null,
+                userCarRepository.findModelsByUser(user)
+        );
     }
 
 }

@@ -16,7 +16,11 @@ public class ProfileImage {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
+
+    @Column(name = "image_url", nullable = false, length = 512, unique = true)
     private String imageUrl;
+
+    @Column(length = 50, nullable = false, unique = true)
     private String name;
 
     @Builder

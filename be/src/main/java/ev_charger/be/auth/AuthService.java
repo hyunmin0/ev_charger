@@ -4,32 +4,37 @@ import ev_charger.be.auth.client.OAuthApiClient;
 import ev_charger.be.auth.dto.request.RegisterRequest;
 import ev_charger.be.auth.dto.response.ReissueResponse;
 import ev_charger.be.auth.dto.response.SocialLoginResponse;
+import ev_charger.be.auth.dto.response.TempUserInfo;
 import ev_charger.be.auth.dto.response.UserInfo;
+import ev_charger.be.auth.redis.RedisKeys;
+import ev_charger.be.auth.redis.RedisTtl;
 import ev_charger.be.security.JwtProvider;
 import ev_charger.be.user.Provider;
 import ev_charger.be.user.User;
 import ev_charger.be.user.UserRepository;
 import ev_charger.be.user.profileImage.ProfileImage;
 import ev_charger.be.user.profileImage.ProfileImageRepository;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly=true) // 조회를 기본값으로(메모리 사용 감소 등 최적화)
 public class AuthService {
     private final List<OAuthApiClient> apiClients; // API 호출
     private final JwtProvider jwtProvider; // JWT 토큰 생성 및 검증
     private final UserRepository userRepository; // DB에서 유저 찾기
     private final RedisTemplate<String, String> redisTemplate;
-    private final ObjectMapper objectMapper;
     private final ProfileImageRepository profileImageRepository;
+    private final ObjectMapper objectMapper;
 
 
     /**
@@ -45,7 +50,7 @@ public class AuthService {
         OAuthApiClient client = apiClients.stream() // list 순회
                 .filter(c -> c.getProvider() == provider)
                 .findFirst() // 첫 번쨰 일치하는 클라이언트 반환(Optional)
-                .orElseThrow(); // 없으면 예외처리
+                .orElseThrow(() ->  new IllegalArgumentException("지원하지 않는 provider")); // 없으면 예외처리
 
         UserInfo userInfo = client.getUserInfo(accessToken); // 유저 정보 받아오기 id, email, nickname
 
@@ -59,46 +64,63 @@ public class AuthService {
             user.updateRefreshToken(newRefreshToken); // DB에 새 refreshToken 저장
 
             // SUCCESS랑 토큰 2개 반환
-            return new SocialLoginResponse("SUCCESS", newAccessToken, newRefreshToken, null);
+            return new SocialLoginResponse("SUCCESS",
+                    newAccessToken,
+                    newRefreshToken,
+                    null);
 
         } else {
             // 신규유저
             // 닉네임을 아직 설정 안했으니까 프로필 설정이 필요하다고 알려줌
-            // 임시 토큰: "provider:providerId"
-            String tempToken = provider + ":"+ userInfo.id();
-            // email이 없으면 "" 입력
-            String emailValue = userInfo.email() != null ? userInfo.email() : "";
-            // redis에 임시 토큰 저장(키: temp:provider:providerId, 값: emailValue, TTL: 30분) - json 형태
-            redisTemplate.opsForValue().set("temp:" + tempToken, emailValue, 30, TimeUnit.MINUTES);
+
+            // 임시 토큰: UUID 생성
+            String tempToken = UUID.randomUUID().toString();
+
+            TempUserInfo temp = new TempUserInfo(provider, userInfo.id(), userInfo.email());
+
+            // redis에 임시 저장
+            // 키: tempToken
+            // 값: temp(provider, providerId, email)
+            // TTL: TEMP_USER_MINUTES(=30분)
+            redisTemplate.opsForValue().set(
+                    RedisKeys.tempUser(tempToken),
+                    objectMapper.writeValueAsString(temp),
+                    RedisTtl.TEMP_USER_MINUTES,
+                    TimeUnit.MINUTES);
+
             return new SocialLoginResponse("NEED_PROFILE_SELECT", null, null, tempToken);
         }
     }
 
     /**
      * 회원가입(db에 저장)
-     * @param registerRequest tempToken, nickname, profileimage
-     * @return succss, accessToken, refreshToken
+     * @param registerRequest tempToken, nickname, profileImage
+     * @return success, accessToken, refreshToken
      */
     @Transactional
     public SocialLoginResponse register(RegisterRequest registerRequest) {
-        // tempToken, email 추출
-        String redisKey = "temp:" + registerRequest.tempToken();
+        // tempUser의 key
+        String redisKey = RedisKeys.tempUser(registerRequest.tempToken());
 
-        // redis에 있는지 검증
-        if(Boolean.FALSE.equals(redisTemplate.hasKey(redisKey))) {
-            throw new IllegalArgumentException("유효하지 않은 temToken");
+        // redis에서 값 추출
+        String json = Optional.ofNullable(redisTemplate.opsForValue().get(redisKey))
+                .orElseThrow(() -> new IllegalArgumentException("유효하지 않은 tempToken")); // 없으면 예외처리
+
+        // TempUserInfo 타입으로 변환
+        TempUserInfo temp;
+        try {
+            temp = objectMapper.readValue(json, TempUserInfo.class);
+        } catch (Exception e) {
+            throw new IllegalStateException("tempToken 데이터가 손상되었습니다.");
         }
 
-        // email 값 추출
-        // 키: temp:tempToken 값: emailValue
-        String email = redisTemplate.opsForValue().get(redisKey);
-        // email이 없으면 null
-        String emailToSave = (email == null || email.isEmpty()) ? null : email;
+        // email 값 추출(없으면 null)
+        String email = (temp.email() == null || temp.email().isBlank()) ? null : temp.email();
 
-        // tempToken -> provider, providerId 추출(e.g. "KAKAO:1234")
-        String[] parts = registerRequest.tempToken().split(":", 2);
-        Provider provider = Provider.valueOf(parts[0]);
-        String providerId = parts[1];
+        // 중복 확인
+        if (userRepository.existsByProviderAndProviderId(temp.provider(),temp.providerId())) {
+            throw new IllegalStateException("이미 가입된 사용자 입니다.");
+        }
 
         // profileImage 조회
         ProfileImage profileImage = profileImageRepository.findById(registerRequest.profileImageId())
@@ -108,9 +130,9 @@ public class AuthService {
         User user = User.builder()
                 .nickname(registerRequest.nickname())
                 .profileImage(profileImage)
-                .email(emailToSave)
-                .provider(provider)
-                .providerId(providerId)
+                .email(email)
+                .provider(temp.provider())
+                .providerId(temp.providerId())
                 .build();
         // uuid가 생성되기 위해서는 @Transactional로는 안됨. save() 필요
         userRepository.save(user);
@@ -148,7 +170,10 @@ public class AuthService {
                     // blacklist를 토큰값으로 구분
                     // remaining: TTL 값, TimeUnit.MILLISECONDS: TTL 단뒤(밀리초)
                     // 즉, remaining이 0이 되면 자동 삭제
-                    .set("blacklist:" + accessToken, "logout", remaining, TimeUnit.MILLISECONDS);
+                    .set(RedisKeys.blacklist(accessToken),
+                            "logout",
+                            remaining,
+                            TimeUnit.MILLISECONDS);
         }
 
 
