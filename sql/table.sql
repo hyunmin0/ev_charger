@@ -16,14 +16,19 @@ create table users (
 	foreign key (profile_image_id) references profile_image(id) on delete
 	set null
 );
+create table car (
+	car_id BIGINT primary key generated always as identity,
+	car_name varchar(255) not null unique,
+	battery_capacity Float not null
+);
 CREATE TABLE user_car(
-	car_id UUID NOT NULL DEFAULT gen_random_uuid(),
+	user_car_id BIGINT generated always as identity primary key,
 	user_id UUID not NULL,
-	model VARCHAR(255) NOT NULL,
-	battery_capacity FLOAT NOT NULL,
-	PRIMARY KEY (car_id),
-	unique(model, user_id),
-	FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE cascade
+	car_id BIGINT not null,
+	battery_capacity Float not null,
+	unique(car_id, user_id),
+	FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE cascade,
+	FOREIGN KEY (car_id) REFERENCES car (car_id) ON DELETE cascade
 );
 create table station (
 	statNm varchar(100) not null,

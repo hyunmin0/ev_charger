@@ -1,12 +1,15 @@
 package ev_charger.be.user;
 
-import ev_charger.be.user.car.UserCarRepository;
+import ev_charger.be.user.userCar.UserCarRepository;
 import ev_charger.be.user.dto.response.UserResponse;
 import ev_charger.be.user.profileImage.ProfileImage;
 import ev_charger.be.user.profileImage.ProfileImageRepository;
+import ev_charger.be.user.userCar.dto.response.UserCarResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -33,7 +36,7 @@ public class UserService {
      */
     @Transactional
     public String updateProfileImage(User user, Integer newProfileImageId) {
-        // profileimage에 해당 id가 있는지 확인
+        // profileImage에 해당 id가 있는지 확인
         ProfileImage profileImage = profileImageRepository.findById(newProfileImageId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 프로필 이미지"));
 
@@ -51,11 +54,18 @@ public class UserService {
      * @return nickname, email(없으면 null), profileImageUrl(없으면 null), model(없으면 빈 리스트)
      */
     public UserResponse getProfile(User user) {
+        List<UserCarResponse> cars = userCarRepository.findByUser(user)
+                .stream()
+                .map(uc -> new UserCarResponse(
+                        uc.getUserCarId(),
+                        uc.getCar().getCarName(),
+                        uc.getBatteryCapacity()
+                )).toList();
         return new UserResponse(
                 user.getNickname(),
                 user.getEmail(),
                 user.getProfileImage() != null ? user.getProfileImage().getImageUrl():null,
-                userCarRepository.findModelsByUser(user)
+                cars
         );
     }
 

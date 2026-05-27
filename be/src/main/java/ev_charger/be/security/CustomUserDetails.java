@@ -32,4 +32,7 @@ public class CustomUserDetails implements UserDetails {
     public String getPassword() {
         return "";
     }
+
+    // 컨트롤러가 User 객체를 가져오기 위해 필요
+    public User getUser() { return user;}
 }

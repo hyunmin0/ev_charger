@@ -1,6 +1,7 @@
-package ev_charger.be.user.car;
+package ev_charger.be.user.userCar;
 
 
+import ev_charger.be.car.Car;
 import ev_charger.be.user.User;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -13,30 +14,29 @@ import java.util.UUID;
 @Entity
 @Table(name="user_car",
     uniqueConstraints = { @UniqueConstraint(
-            columnNames = {"model", "user_id"})})
+            columnNames = {"car_id", "user_id"})})
 @Getter
 @NoArgsConstructor(access=AccessLevel.PROTECTED)
 public class UserCar {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID carId;
+    private long userCarId;
 
     @JoinColumn(name="user_id", nullable = false)
     @ManyToOne(fetch=FetchType.LAZY)
     private User user;
 
-    @Column(nullable = false)
-    private String model;
+    @JoinColumn(name="car_id", nullable = false)
+    @ManyToOne(fetch=FetchType.LAZY)
+    private Car car;
 
-    @Column(name="battery_capacity", nullable = false)
-    private float batteryCapacity;
+    @Column(name="batter_capacity", nullable = false)
+    private Float batteryCapacity;
 
     @Builder
-    public UserCar(User user, String model, float batteryCapacity) {
+    public UserCar(User user, Car car, Float batteryCapacity) {
         this.user = user;
-        this.model = model;
+        this.car = car;
         this.batteryCapacity = batteryCapacity;
     }
-
-
 }
