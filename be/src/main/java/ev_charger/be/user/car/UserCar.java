@@ -11,7 +11,9 @@ import lombok.NoArgsConstructor;
 import java.util.UUID;
 
 @Entity
-@Table(name="user_car")
+@Table(name="user_car",
+    uniqueConstraints = { @UniqueConstraint(
+            columnNames = {"model", "user_id"})})
 @Getter
 @NoArgsConstructor(access=AccessLevel.PROTECTED)
 public class UserCar {
@@ -23,7 +25,7 @@ public class UserCar {
     @ManyToOne(fetch=FetchType.LAZY)
     private User user;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String model;
 
     @Column(name="battery_capacity", nullable = false)

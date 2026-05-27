@@ -19,9 +19,10 @@ create table users (
 CREATE TABLE user_car(
 	car_id UUID NOT NULL DEFAULT gen_random_uuid(),
 	user_id UUID not NULL,
-	model VARCHAR(255) NOT NULL unique,
+	model VARCHAR(255) NOT NULL,
 	battery_capacity FLOAT NOT NULL,
 	PRIMARY KEY (car_id),
+	unique(model, user_id),
 	FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE cascade
 );
 create table station (
