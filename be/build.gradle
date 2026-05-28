@@ -40,6 +40,10 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-security'
     // redis
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    // google oauth
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+
+    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 }
 
 tasks.named('test') {

@@ -3,6 +3,7 @@ package ev_charger.be.auth.client;
 import ev_charger.be.auth.dto.response.UserInfo;
 import ev_charger.be.user.Provider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -28,19 +29,17 @@ public class KakaoApiClient implements OAuthApiClient{
 
         HttpEntity<Void> request = new HttpEntity<>(headers);
 
-        ResponseEntity<Map> response = restTemplate.exchange( //카카오 서버에 get 요청 보내기 map 형태로 받음
-                apiUrl, HttpMethod.GET, request, Map.class);
+        ResponseEntity<Map<String,Object>> response = restTemplate.exchange( //카카오 서버에 get 요청 보내기 map 형태로 받음
+                apiUrl, HttpMethod.GET, request,
+                new ParameterizedTypeReference<Map<String,Object>>() {});
 
-        Map body = response.getBody();
+        Map<String,Object> body = response.getBody();
         String id = String.valueOf(body.get("id"));
 
-        Map kakaoAccount = (Map) body.get("kakao_account");
+        Map<String,Object> kakaoAccount = (Map<String, Object>) body.get("kakao_account");
         String email = (String) kakaoAccount.get("email");
 
-        Map profile = (Map) kakaoAccount.get("profile");
-        String nickname = (String) profile.get("nickname");
-
-        return new UserInfo(id, email, nickname);
+        return new UserInfo(id, email);
     }
 
     @Override

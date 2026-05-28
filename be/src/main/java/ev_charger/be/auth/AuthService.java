@@ -41,7 +41,6 @@ public class AuthService {
      * 회원가입 및 로그인
      * @param accessToken 로그인할 토큰
      * @param provider 카카오/구글
-     * @return
      */
     @Transactional
     public SocialLoginResponse socialLogin(String accessToken, Provider provider) {
@@ -52,7 +51,7 @@ public class AuthService {
                 .findFirst() // 첫 번쨰 일치하는 클라이언트 반환(Optional)
                 .orElseThrow(() ->  new IllegalArgumentException("지원하지 않는 provider")); // 없으면 예외처리
 
-        UserInfo userInfo = client.getUserInfo(accessToken); // 유저 정보 받아오기 id, email, nickname
+        UserInfo userInfo = client.getUserInfo(accessToken); // 유저 정보 받아오기 id, email
 
         Optional<User> existing = userRepository.findByProviderAndProviderId(provider, userInfo.id()); //우리 DB에 이 사람이 이미 있는지 확인 provider랑 id 조합으로 찾음
         if (existing.isPresent()){ // DB에 있으면 기존유저 없으면 신규유저
@@ -94,7 +93,7 @@ public class AuthService {
 
     /**
      * 회원가입(db에 저장)
-     * @param registerRequest tempToken, nickname, profileImage
+     * @param registerRequest tempToken, nickname, profileImageId
      * @return success, accessToken, refreshToken
      */
     @Transactional
