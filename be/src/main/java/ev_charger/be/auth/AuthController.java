@@ -1,13 +1,13 @@
 package ev_charger.be.auth;
+
+import ev_charger.be.auth.dto.request.RegisterRequest;
+import ev_charger.be.auth.dto.response.ReissueResponse;
 import ev_charger.be.auth.dto.response.SocialLoginResponse;
+import ev_charger.be.user.Provider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
-import java.util.Map;
 
 @RestController
 @RequestMapping("/auth")
@@ -17,7 +17,7 @@ public class AuthController {
     private final AuthService authService;//실제 로직은 service에서 처리 controller는 요청만 받아서 넘겨줌
     //input: accessToken(String), provider(Provider)
     //output: SocialLoginResponse{ status, jwtAccessToken, jwtRefreshToken, tempToken }
-    @postMapping("login") //POST /auth/login으로 요청이 오면 실행
+    @PostMapping("/login") //POST /auth/login으로 요청이 오면 실행
     public ResponseEntity<SocialLoginResponse> login(
             @RequestParam String accessToken,
             @RequestParam Provider provider) {
@@ -36,10 +36,18 @@ public class AuthController {
     // input : accessToken(String), refreshToken(String)
     // output: 없음 (200 OK)
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout() {
-            RequestParam String accessToken,
-                @RequestParam String refreshToken) {
+    public ResponseEntity<Void> logout(
+            @RequestParam String accessToken,
+            @RequestParam String refreshToken) {
             authService.logout(accessToken, refreshToken);
         return ResponseEntity.ok().build();
+    }
+    //토큰 재발급
+    // input : refreshToken(String)
+    // output: ReissueResponse { jwtAccessToken, jwtRefreshToken }
+    @PostMapping("/reissue")
+    public ResponseEntity<ReissueResponse> reissue(
+            @RequestParam String refreshToken) {
+        return ResponseEntity.ok(authService.reissue(refreshToken));
     }
 }
