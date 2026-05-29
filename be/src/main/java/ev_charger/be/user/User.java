@@ -1,5 +1,6 @@
 package ev_charger.be.user;
 
+import ev_charger.be.user.enums.Provider;
 import ev_charger.be.user.profileImage.ProfileImage;
 import jakarta.persistence.*;
 import lombok.*;

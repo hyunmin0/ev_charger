@@ -9,7 +9,7 @@ import ev_charger.be.auth.dto.response.UserInfo;
 import ev_charger.be.auth.redis.RedisKeys;
 import ev_charger.be.auth.redis.RedisTtl;
 import ev_charger.be.security.JwtProvider;
-import ev_charger.be.user.Provider;
+import ev_charger.be.user.enums.Provider;
 import ev_charger.be.user.User;
 import ev_charger.be.user.UserRepository;
 import ev_charger.be.user.profileImage.ProfileImage;

@@ -42,8 +42,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     // google oauth
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+    // geography
+    implementation 'org.hibernate.orm:hibernate-spatial:6.4.4.Final'
 
-    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 }
 
 tasks.named('test') {

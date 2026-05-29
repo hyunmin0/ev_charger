@@ -1,7 +1,7 @@
 package ev_charger.be.auth.client;
 
 import ev_charger.be.auth.dto.response.UserInfo;
-import ev_charger.be.user.Provider;
+import ev_charger.be.user.enums.Provider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;

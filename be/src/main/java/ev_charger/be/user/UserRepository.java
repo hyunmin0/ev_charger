@@ -1,5 +1,6 @@
 package ev_charger.be.user;
 
+import ev_charger.be.user.enums.Provider;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
