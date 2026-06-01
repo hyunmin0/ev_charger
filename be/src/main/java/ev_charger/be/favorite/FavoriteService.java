@@ -1,36 +1,79 @@
 package ev_charger.be.favorite;
 
+import ev_charger.be.station.Station;
+import ev_charger.be.station.StationRepository;
+import ev_charger.be.favorite.dto.response.FavoriteResponse;
+import ev_charger.be.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class FavoriteService {
 
     private final FavoriteRepository favoriteRepository;
+    private final StationRepository stationRepository;
 
-    public void addFavorite(int statId) {
+    /**
+     * 즐찾 추가
+     * @param user
+     * @param statId
+     */
+    @Transactional
+    public void addFavorite(User user, String statId) {
         // statId가 station 테이블에 존재하는지 검증
-        // statId가 user의 favorite에 있는지 확인
-        // userId, statId 저장
+        Station station = stationRepository.findById(statId)
+                .orElseThrow(() -> new IllegalArgumentException("유효하지 않은 충전소입니다."));
+
+        // station이 user의 favorite에 있는지 확인
+        if (favoriteRepository.existsByUserAndStation(user, station)) {
+                    throw new IllegalArgumentException("이미 등록된 충전소입니다.");
+                }
+
+        // db 저장
+        favoriteRepository.save(Favorite.builder()
+                .user(user)
+                .station(station)
+                .build());
+
     }
 
-    public void deleteFavorite(int statId) {
+    /**
+     * 즐찾 제거
+     * @param user
+     * @param statId
+     */
+    @Transactional
+    public void deleteFavorite(User user, String statId) {
         // statId가 user의 favorite에 있는지 검증
+        Station station = stationRepository.findById(statId)
+                .orElseThrow(() -> new IllegalArgumentException("즐겨찾기에 존재하지 않는 충전소입니다."));
+
         // statId 제거
+        favoriteRepository.deleteByUserAndStation(user, station);
     }
 
-    public  List</**레코드만들기**/> getFavoriteList() {
-        // userId로 favorite 조회
-        // 위의 결과 중 stateId와 station 테이블을 조인
-        // 이름
-        // 리뷰수
-        // 간단한 도로명 주소, addr, addrDetail
-        // 내 위치에서의 거리(즉, location)
-        // 이용 가능한 충전기 수, 그에 맞춰서 이용가능/충전중/고장
-        // 충전타입
-        // created
-
+    /**
+     * 즐겨찾기 조회
+     * @param user
+     * @param lat
+     * @param lng
+     * @return 충전소id, 이름, 주소, 거리, 등록날짜
+     */
+    public  List<FavoriteResponse> getFavoriteList(User user, double lat, double lng) {
+        return favoriteRepository.findByUserWithStation(user.getUserId(), lat, lng)
+                .stream()
+                .map(p -> new FavoriteResponse(
+                        p.getStatId(),
+                        p.getStatNm(),
+                        p.getAddr(),
+                        p.getDistance(),
+                        p.getCreated()
+                )).toList();
     }
 
 }
