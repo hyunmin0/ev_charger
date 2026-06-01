@@ -35,4 +35,10 @@ public class UserController {
         return ResponseEntity.ok().build();
     }
     // 프로필 사진 수정
+    @PatchMapping("/profile-image")
+    public ResponseEntity<String> updateProfileImage(
+            @AuthenticationPrincipal CustomUserDetails userDetails, // 로그인한 유저
+            @RequestParam Integer profileImageId) { // url에서 이미지 id 받음
+        return ResponseEntity.ok(userService.updateProfileImage(userDetails.getUser(), profileImageId));
+    }
 }
