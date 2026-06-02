@@ -28,4 +28,23 @@ public class UserCarController {
         userCarService.addUserCar(userDetails.getUser(), carId, batteryCapacity);
         return ResponseEntity.ok().build();
     }
+    // 차량 목록 조회
+    // input : 헤더에 JWT 토큰
+    // output: List<UserCarResponse> [{ userCarId, carName, batteryCapacity }, ...]
+    @GetMapping
+    public ResponseEntity<List<UserCarResponse>> getUserCarList(
+            @AuthenticationPrincipal CustomUserDetails userDetails) { // 로그인한 유저
+        return ResponseEntity.ok(userCarService.getUserCarList(userDetails.getUser()));
+    }
+
+    // 차량 삭제
+    // input : userCarId(long)
+    // output: 없음 (200 OK)
+    @DeleteMapping("/{userCarId}")
+    public ResponseEntity<Void> deleteUserCar(
+            @AuthenticationPrincipal CustomUserDetails userDetails, // 로그인한 유저
+            @PathVariable long userCarId) {                         // URL에서 차량 id 받음
+        userCarService.deleteUserCar(userDetails.getUser(), userCarId);
+        return ResponseEntity.ok().build();
+    }
 }
