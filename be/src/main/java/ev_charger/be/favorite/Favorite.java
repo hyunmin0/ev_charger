@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @EntityListeners(AuditingEntityListener.class) // created 자동 시간 측정
-@Table(name="favorite", uniqueConstraints = {@UniqueConstraint(columnNames = {"user_id", "statId"})})
+@Table(name="favorite", uniqueConstraints = {@UniqueConstraint(columnNames = {"user_id", "lastId"})})
 @Getter
 @NoArgsConstructor(access= AccessLevel.PROTECTED)
 public class Favorite {
@@ -27,7 +27,7 @@ public class Favorite {
     @ManyToOne(fetch=FetchType.LAZY)
     private User user;
 
-    @JoinColumn(name="statId", nullable=false)
+    @JoinColumn(name="lastId", nullable=false)
     @ManyToOne(fetch = FetchType.LAZY)
     private Station station;
 

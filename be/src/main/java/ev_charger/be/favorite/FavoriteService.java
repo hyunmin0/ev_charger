@@ -53,7 +53,7 @@ public class FavoriteService {
         Station station = stationRepository.findById(statId)
                 .orElseThrow(() -> new IllegalArgumentException("즐겨찾기에 존재하지 않는 충전소입니다."));
 
-        // statId 제거
+        // lastId 제거
         favoriteRepository.deleteByUserAndStation(user, station);
     }
 

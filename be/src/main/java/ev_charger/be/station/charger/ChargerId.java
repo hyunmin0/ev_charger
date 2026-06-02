@@ -1,5 +1,5 @@
 package ev_charger.be.station.charger;
-// Charger 복합키 클래스(statId + chgerId)
+// Charger 복합키 클래스(lastId + chgerId)
 
 import lombok.EqualsAndHashCode;
 

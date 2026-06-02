@@ -16,7 +16,9 @@ public interface FavoriteRepository extends JpaRepository<Favorite, Long> {
         select s.statId statId,
                s.statNm statNm,
                s.addr addr,
-               ST_Distance(s.location, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)) distance, -- intelliJ가 postGIS 함수를 몰라서 경고일 듯?
+               ST_Distance(s.location, -- intelliJ가 postGIS 함수를 몰라서 경고
+                            ST_SetSRID(ST_MakePoint(:lng, :lat),
+                            4326))::geography distance, --단위: 미터(m)
                f.created created
         from favorite f
         join station s on f.statId = s.statId
