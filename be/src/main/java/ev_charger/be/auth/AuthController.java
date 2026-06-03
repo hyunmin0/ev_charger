@@ -3,7 +3,8 @@ package ev_charger.be.auth;
 import ev_charger.be.auth.dto.request.RegisterRequest;
 import ev_charger.be.auth.dto.response.ReissueResponse;
 import ev_charger.be.auth.dto.response.SocialLoginResponse;
-import ev_charger.be.user.Provider;
+
+import ev_charger.be.user.enums.Provider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
