@@ -7,6 +7,7 @@ public interface StationProjection{
     String getAddr();
     double getLat();
     double getLng();
+    String getUseTime();
     Integer getTotalCount();
     Integer getAvailableCount();
     double getDistance();

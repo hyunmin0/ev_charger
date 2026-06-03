@@ -1,9 +1,10 @@
 package ev_charger.be.station;
 
 import ev_charger.be.common.CursorUtils;
+import ev_charger.be.station.dto.request.MapBoundsRequest;
 import ev_charger.be.station.dto.request.NearbyStationRequest;
 import ev_charger.be.station.dto.response.NearbyStationPageResponse;
-import ev_charger.be.station.dto.response.NearbyStationResponse;
+import ev_charger.be.station.dto.response.StationResponse;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -15,8 +16,6 @@ import java.util.List;
 @Transactional(readOnly = true)
 @RequiredArgsConstructor(access = AccessLevel.PROTECTED)
 public class StationService {
-    // 한 번 조회 시 20개
-    private static final int PAGE_SIZE = 20;
 
     private final CursorUtils cursorUtils;
     private final StationRepository stationRepository;
@@ -28,45 +27,59 @@ public class StationService {
      */
     public NearbyStationPageResponse getNearbyStations(NearbyStationRequest request) {
 
-        // 첫 페이지면 null, 아니면 커서에서 마지막 statId, distance 추출
-        Double cursorDistance = null;
-        String cursorStatId = null;
+        // 커서가 있으면 디코딩해서 마지막 distance 추출
+        // 다음 쿼리에서 이 거리 이후의 데이터만 가져오기 위해 필요(null이면 첫 페이지)
+        Double cursorDistance = request.cursor() != null ? cursorUtils.decode(request.cursor()) : null;
 
-        // 커서가 있으면 디코딩해서 마지막 statId, distance 추출
-        // 다음 쿼리에서 이 값 이후의 데이터만 가져오기 위해
-        if (request.cursor() != null) {
-            CursorUtils.CursorData cursorData = cursorUtils.decode(request.cursor());
-            cursorDistance = cursorData.distance();
-            cursorStatId = cursorData.lastId();
-        }
 
-        // range(반경) 안의 충전소를 거리순으로 PAGE_SIZE개만 조회
-        // cursorDistance, cursorStatId 이후의 데이터만 가져옴
-        List<NearbyStationResponse> stations = stationRepository.findNearbyStationsWithStats(
-                request.lat(), request.lng(), request.range(), request.availableOnly(), cursorDistance, cursorStatId, PAGE_SIZE)
+        // range(반경) 내이면서 cursorDistance 이후의 데이터만 가져옴
+        List<StationResponse> stations = stationRepository.findNearbyStationsWithStats(
+                request.lat(), request.lng(), request.range(), request.availableOnly(), cursorDistance)
                 .stream()
-                .map(p -> new NearbyStationResponse(
+                .map(p -> new StationResponse(
                         p.getStatId(),
                         p.getStatNm(),
                         p.getAddr(),
                         p.getLat(),
                         p.getLng(),
+                        p.getUseTime(),
                         p.getTotalCount(),
                         p.getAvailableCount(),
                         p.getDistance()
                 ))
                 .toList();
 
-        // 조회 결과가 PAGE_SIZE개면 다음 페이지가 존재할 수 있음
-        // PAGE_SIZE보다 적으면 마지막 페이지이므로 nextCursor = null
-        String nextCursor = null;
-        if (stations.size() == PAGE_SIZE) {
-            // .get(index)
-            NearbyStationResponse last = stations.get(stations.size() - 1);
-            // 마지막 statId, distance를 인코딩해서 nextCursor 생성
-            nextCursor = cursorUtils.encode(last.statId(), last.distance());
-        }
+        // 현 반경을 다음 커서로 설정
+        String nextCursor = cursorUtils.encode(request.range());
 
         return new NearbyStationPageResponse(stations, nextCursor);
+    }
+
+    /**
+     * 현 지도 내의 충전소 찾기
+     * @param request 최대최소 위경도, 충전가능만(T/F)
+     * @return 충전소id, 이름, 주소, 위경도, 운영시간, 총 충전기수, 충전가능 충전기수, 거리
+     */
+    public List<StationResponse> getStationsInBounds(MapBoundsRequest request) {
+        return stationRepository.findStationsInBoundsWithStats(
+                request.minLat(),
+                request.maxLat(),
+                request.minLng(),
+                request.maxLng(),
+                request.userLat(),
+                request.userLng(),
+                request.availableOnly()
+        ).stream()
+        .map(p -> new StationResponse(
+                p.getStatId(),
+                p.getStatNm(),
+                p.getAddr(),
+                p.getLat(),
+                p.getLng(),
+                p.getUseTime(),
+                p.getTotalCount(),
+                p.getAvailableCount(),
+                p.getDistance()
+        )).toList();
     }
 }
