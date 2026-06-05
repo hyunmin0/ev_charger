@@ -86,7 +86,8 @@ create table review (
 	),
 	statId varchar(8) not null,
 	--1~5
-	created TIMESTAMP NOT NULL,
+	created_at TIMESTAMP NOT NULL,
+	updated_at TIMESTAMP NOT NULL,
 	foreign key (statId) references station(statId) on delete cascade,
 	foreign key (user_id) references users(user_id) on delete cascade
 );
