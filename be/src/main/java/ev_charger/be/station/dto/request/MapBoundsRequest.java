@@ -1,5 +1,8 @@
 package ev_charger.be.station.dto.request;
 
+import ev_charger.be.station.StationFilter;
+
+
 public record MapBoundsRequest(
         double minLat,
         double maxLat,
@@ -7,6 +10,6 @@ public record MapBoundsRequest(
         double maxLng,
         double userLat,
         double userLng,
-        boolean availableOnly
+        StationFilter filter
 ) {
 }

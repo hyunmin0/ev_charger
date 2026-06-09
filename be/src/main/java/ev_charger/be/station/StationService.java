@@ -22,8 +22,8 @@ public class StationService {
 
     /**
      * 가까운 충전소 찾기
-     * @param request 경도, 위도, 범위(m), 충전가능만(T/F)
-     * @return list<충전소id, 충전소이름, 주소, 경도, 위도, 총 충전기 수, 사용 가능 충전기 수, 거리>, 다음 커서
+     * @param request
+     * @return list<충전소id, 충전소이름, 주소, 경도, 위도, 총 충전기 수, 거리, 필터들>, 다음 커서
      */
     public NearbyStationPageResponse getNearbyStations(NearbyStationRequest request) {
 
@@ -33,53 +33,17 @@ public class StationService {
 
 
         // range(반경) 내이면서 cursorDistance 이후의 데이터만 가져옴
-        List<StationResponse> stations = stationRepository.findNearbyStationsWithStats(
-                request.lat(), request.lng(), request.range(), request.availableOnly(), cursorDistance)
-                .stream()
-                .map(p -> new StationResponse(
-                        p.getStatId(),
-                        p.getStatNm(),
-                        p.getAddr(),
-                        p.getLat(),
-                        p.getLng(),
-                        p.getUseTime(),
-                        p.getTotalCount(),
-                        p.getAvailableCount(),
-                        p.getDistance()
-                ))
-                .toList();
+        List<StationResponse> stations = stationRepository.findNearbyStationsWithFilter(request, cursorDistance);
 
-        // 현 반경을 다음 커서로 설정
-        String nextCursor = cursorUtils.encode(request.range());
-
-        return new NearbyStationPageResponse(stations, nextCursor);
+        return new NearbyStationPageResponse(stations, cursorUtils.encode(request.range()));
     }
 
     /**
      * 현 지도 내의 충전소 찾기
-     * @param request 최대최소 위경도, 충전가능만(T/F)
-     * @return 충전소id, 이름, 주소, 위경도, 운영시간, 총 충전기수, 충전가능 충전기수, 거리
+     * @param request
+     * @return 충전소id, 이름, 주소, 위경도, 운영시간, 총 충전기수, 거리, 필터들
      */
     public List<StationResponse> getStationsInBounds(MapBoundsRequest request) {
-        return stationRepository.findStationsInBoundsWithStats(
-                request.minLat(),
-                request.maxLat(),
-                request.minLng(),
-                request.maxLng(),
-                request.userLat(),
-                request.userLng(),
-                request.availableOnly()
-        ).stream()
-        .map(p -> new StationResponse(
-                p.getStatId(),
-                p.getStatNm(),
-                p.getAddr(),
-                p.getLat(),
-                p.getLng(),
-                p.getUseTime(),
-                p.getTotalCount(),
-                p.getAvailableCount(),
-                p.getDistance()
-        )).toList();
+        return stationRepository.findStationsInBoundsWithFilter(request);
     }
 }

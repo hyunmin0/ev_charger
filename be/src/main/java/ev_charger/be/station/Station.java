@@ -2,6 +2,8 @@ package ev_charger.be.station;
 
 import ev_charger.be.common.enums.YN;
 import ev_charger.be.station.enums.FloorType;
+import ev_charger.be.station.enums.Kind;
+import ev_charger.be.station.stationOperator.StationOperator;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -34,11 +36,9 @@ public class Station {
     @Column(length = 50, nullable = false)
     private String useTime;
 
-    @Column(length = 50, nullable = false)
-    private String busiNm;
-
-    @Column(length = 20, nullable = false)
-    private String busiCall;
+    @JoinColumn(name = "busiId")
+    @ManyToOne(fetch = FetchType.LAZY)
+    private StationOperator stationOperator;
 
     @Column(length = 2, nullable = false)
     private String zcode;
@@ -46,7 +46,7 @@ public class Station {
     private String zscode;
 
     @Column(length = 2)
-    private String kind;
+    private Kind kind;
 
     @Column(length = 4)
     private String kindDetail;

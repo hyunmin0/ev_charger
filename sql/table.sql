@@ -30,6 +30,11 @@ CREATE TABLE user_car(
 	FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE cascade,
 	FOREIGN KEY (car_id) REFERENCES car (car_id) ON DELETE cascade
 );
+create table station_operator (
+	busiId varchar(2) primary key,
+	busiNm varchar(50) not null,
+	busiCall varchar(20) not null
+);
 create table station (
 	statNm varchar(100) not null,
 	statId varchar(8) primary key,
@@ -37,8 +42,7 @@ create table station (
 	addrDetail varchar(200),
 	location geography(point, 4326) not null,
 	useTime varchar(50) not null,
-	busiNm varchar(50) not null,
-	busiCall varchar(20) not null,
+	busiId varchar(2),
 	zcode varchar(2) not null,
 	zscode varchar(5),
 	kind varchar(2),
@@ -48,7 +52,9 @@ create table station (
 	limitYn varchar(1) check (limitYn in ('Y', 'N')),
 	limitDetail varchar(100),
 	floorNum varchar(50),
-	floorType varchar(2) check (floorType in ('F', 'B'))
+	floorType varchar(2) check (floorType in ('F', 'B')),
+	foreign key (busiId) references station_operator(busiId) on delete
+	set null
 );
 CREATE TABLE charger(
 	statId varchar(8) NOT NULL,
