@@ -5,6 +5,7 @@ import ev_charger.be.station.dto.request.NearbyStationRequest;
 import ev_charger.be.station.dto.response.StationResponse;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
+import jakarta.persistence.Tuple;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.query.NativeQuery;
 import org.springframework.stereotype.Repository;
@@ -38,7 +39,10 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
                    ST_X(s.location::geometry) lng,
                    s.useTime,
                    count(c.chgerId) totalCount,
-                   count(c.chgerId) filter (where c.stat = '2') availableCount, -- stat이 2인, 즉, 충전기의 상태가 waiting일 경우
+                   count(c.chgerId) filter (where c.stat in ('0', '9')) unknownCount,
+                   count(c.chgerId) filter (where c.stat = '2') availableCount,
+                   count(c.chgerId) filter (where c.stat = '3') inUseCount,
+                   count(c.chgerId) filter (where c.stat in ('1', '4', '5', '6') ) unavailableCount,
                    ST_Distance(s.location, ST_MakePoint(:lng, :lat)::geography) distance -- 충전소 위치와 현 위치의 거리
             from station s join charger c on c.statId = s.statId
             where ST_DWithin(s.location, ST_MakePoint(:lng, :lat)::geography, :range) -- range(반경) 안에 존재하는 경우
@@ -52,7 +56,7 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
         appendFilterWithGroupBy(sql, request.filter());
 
         // sql(=문자열) 작성 후 쿼리 객체 생성
-        Query query = em.createNativeQuery(sql.toString());
+        Query query = em.createNativeQuery(sql.toString(), Tuple.class);
 
         // 이 메서드 고유 파라미터 바인딩
         // (sql 문자열 안의 :lat, :range 같은 값에 실제 값을 채워 넣음)
@@ -81,14 +85,17 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
 
         StringBuilder sql = new StringBuilder("""
             select s.statId,
-                s.statNm,
-                s.addr,
-                ST_Y(s.location::geometry) lat,
-                ST_X(s.location::geometry) lng,
-                s.useTime,
-                count(c.chgerId) totalCount,
-                count(c.chgerId) filter (where c.stat = '2') availableCount, -- stat이 2인, 즉, 충전기의 상태가 waiting일 경우
-                ST_Distance(s.location, ST_MakePoint(:userLng, :userLat)::geography) distance -- 충전소 위치와 현 위치의 거리
+            s.statNm,
+            s.addr,
+            ST_Y(s.location::geometry) lat,
+            ST_X(s.location::geometry) lng,
+            s.useTime,
+            count(c.chgerId) totalCount,
+            count(c.chgerId) filter (where c.stat in ('0', '9'))  unknownCount,
+            count(c.chgerId) filter (where c.stat = '2') availableCount,
+            count(c.chgerId) filter (where c.stat = '3') inUseCount,
+            count(c.chgerId) filter (where c.stat in ('1', '4', '5', '6')) unavailableCount,
+            ST_Distance(s.location, ST_MakePoint(:userLng, :userLat)::geography) distance -- 충전소 위치와 현 위치의 거리
             from station s join charger c on s.statId = c.statId
             where ST_Within(s.location::geometry, ST_MakeEnvelope(:minLng, :minLat, :maxLng, :maxLat, 4326)) -- 위경도 최대최소 안에 존재하는 경우
             """);
@@ -96,7 +103,7 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
         // 공통 필터 조건
         appendFilterWithGroupBy(sql, request.filter());
 
-        Query query = em.createNativeQuery(sql.toString());
+        Query query = em.createNativeQuery(sql.toString(), Tuple.class);
 
         // 이 메서드 고유 파라미터 바인딩
         query.setParameter("userLat", request.userLat());
@@ -120,23 +127,27 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
     }
 
     /**
-     * 네이티브 쿼리 결과(Object[]) -> StationResponse 변환
+     * 네이티브 쿼리 결과(Tuple) -> StationResponse 변환
      * select 컬럼 순서대로 인덱스 접근
-     * Number로 받는 이유: long, double, bigDecimal 등 어떤 타입이 와도 Number의 자식이므로 안전하게 처리 가능
+     * Number로 받는 이유: 정수형은 db에서 bigint, numeric으로 올 수 있어서 Integer.class로 바로 받으면 예외날 수 있음. -> Number로 받고 .intValue()로 변환
+     * Double은 db의 float8이나 double precision이랑 타입이 맞아서 바로 받아도 됨
      */
     private List<StationResponse> toResponse(List<?> rows) {
         return rows.stream().map(r -> {
-            Object[] row = (Object[]) r;
+            Tuple row = (Tuple) r;
             return new StationResponse(
-                    (String)  row[0], // statId
-                    (String)  row[1], // statNm
-                    (String)  row[2], // addr
-                    ((Number) row[3]).doubleValue(), // lat
-                    ((Number) row[4]).doubleValue(), // lng
-                    (String)  row[5], // useTime
-                    ((Number) row[6]).intValue(), // totalCount
-                    ((Number) row[7]).intValue(), // availableCount
-                    ((Number) row[8]).doubleValue() // distance
+                    row.get("statId", String.class),
+                    row.get("statNm", String.class),
+                    row.get("addr", String.class),
+                    row.get("lat", Double.class),
+                    row.get("lng", Double.class),
+                    row.get("useTime", String.class),
+                    row.get("totalCount", Number.class).intValue(),
+                    row.get("unknownCount", Number.class).intValue(),
+                    row.get("availableCount", Number.class).intValue(),
+                    row.get("inUseCount", Number.class).intValue(),
+                    row.get("unavailableCount", Number.class).intValue(),
+                    row.get("distance", Double.class)
             );
         }).toList();
     }
