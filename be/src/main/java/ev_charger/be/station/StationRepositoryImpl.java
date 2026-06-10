@@ -3,6 +3,8 @@ package ev_charger.be.station;
 import ev_charger.be.station.dto.request.MapBoundsRequest;
 import ev_charger.be.station.dto.request.NearbyStationRequest;
 import ev_charger.be.station.dto.response.StationResponse;
+import ev_charger.be.station.enums.FloorType;
+import ev_charger.be.station.enums.Kind;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import jakarta.persistence.Tuple;
@@ -10,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.hibernate.query.NativeQuery;
 import org.springframework.stereotype.Repository;
 
+import java.sql.SQLException;
 import java.util.List;
 
 
@@ -30,7 +33,6 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
     public List<StationResponse> findNearbyStationsWithFilter(NearbyStationRequest request, Double cursorDistance) {
 
         // 기본 select
-        // 두 쿼리 모두 동일한 컬럼 구조 (toResponse의 Object[] 인덱스 순서와 일치해야 함)
         StringBuilder sql = new StringBuilder("""
             select s.statId,
                    s.statNm,
@@ -38,6 +40,11 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
                    ST_Y(s.location::geometry) lat,
                    ST_X(s.location::geometry) lng,
                    s.useTime,
+                   s.parkingFree,
+                   s.limitYn,
+                   s.kind,
+                   s.floorType,
+                   array_agg(distinct c.chgerType) chgerTypes, -- 중복 제거 배열
                    count(c.chgerId) totalCount,
                    count(c.chgerId) filter (where c.stat in ('0', '9')) unknownCount,
                    count(c.chgerId) filter (where c.stat = '2') availableCount,
@@ -90,6 +97,11 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
             ST_Y(s.location::geometry) lat,
             ST_X(s.location::geometry) lng,
             s.useTime,
+            s.parkingFree,
+            s.limitYn,
+            s.kind,
+            s.floorType,
+            array_agg(distinct c.chgerType) chgerTypes, -- 중복 제거 배열
             count(c.chgerId) totalCount,
             count(c.chgerId) filter (where c.stat in ('0', '9'))  unknownCount,
             count(c.chgerId) filter (where c.stat = '2') availableCount,
@@ -128,7 +140,6 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
 
     /**
      * 네이티브 쿼리 결과(Tuple) -> StationResponse 변환
-     * select 컬럼 순서대로 인덱스 접근
      * Number로 받는 이유: 정수형은 db에서 bigint, numeric으로 올 수 있어서 Integer.class로 바로 받으면 예외날 수 있음. -> Number로 받고 .intValue()로 변환
      * Double은 db의 float8이나 double precision이랑 타입이 맞아서 바로 받아도 됨
      */
@@ -142,6 +153,11 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
                     row.get("lat", Double.class),
                     row.get("lng", Double.class),
                     row.get("useTime", String.class),
+                    "Y".equals(row.get("parkingFree", String.class)),
+                    "N".equals(row.get("limitYn", String.class)),
+                    Kind.descriptionOf(row.get("kind", String.class)), // 시설명 문자열로
+                    FloorType.descriptionOf(row.get("floorType", String.class)), // 지상/지하
+                    toStringList((java.sql.Array) row.get("chgerTypes")),
                     row.get("totalCount", Number.class).intValue(),
                     row.get("unknownCount", Number.class).intValue(),
                     row.get("availableCount", Number.class).intValue(),
@@ -152,6 +168,15 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
         }).toList();
     }
 
+    private List<String> toStringList(java.sql.Array array) {
+        if (array == null) return List.of();
+        try {
+            return List.of((String[]) array.getArray());
+        } catch (SQLException e) {
+            return List.of();
+        }
+    }
+
     /**
      * 공통 필터 where + group by / having / order by
      * 필터 값이 있읆 때만 해당 조건을 sql에 붙임
@@ -159,6 +184,7 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
     private void appendFilterWithGroupBy(StringBuilder sql, StationFilter filter) {
         // station 조건
         if (filter.parkingFree()) sql.append(" AND s.parkingFree = 'Y'\n");
+        if (filter.limitYn()) sql.append(" AND s.limitYn = 'N'\n");
         // NUMERIC으로 변환 후 비교
         // NUMERIC: 소수점 포함 순자 타입
         if (filter.minOutput() != null) sql.append(" AND CAST(c.output AS NUMERIC) >= :minOutput\n");
@@ -172,7 +198,7 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
         // 집계 및 정렬
         // availableOnly = true면 사용 가능한 충전기(stat='2')가 1개 이상인 충전소만 반환
         sql.append("""
-            group by s.statId, s.statNm, s.addr, s.location, s.useTime
+            group by s.statId, s.statNm, s.addr, s.location, s.useTime, s.parkingFree, s.limitYn, s.kind, s.floorType
             having (:availableOnly = false or count(c.chgerId) filter (where c.stat = '2') > 0) -- availableOnly = false면 전체 조회, true면 충전 가능한 충전소만 조회
             order by distance -- 거리순
             """);
