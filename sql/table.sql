@@ -107,19 +107,9 @@ CREATE TABLE favorite(
 	id BIGINT generated always as identity primary key,
 	user_id UUID NOT NULL,
 	statId varchar(8) NOT NULL,
-	created_at TIMESTAMP NOT NULL,
+	created TIMESTAMP NOT NULL,
 	unique (user_id, statId),
 	FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE,
 	FOREIGN KEY (statId) REFERENCES station(statId) ON DELETE CASCADE
-);
-create table charger_alert(
-	alert_id BIGINT generated always as identity primary key,
-	user_id UUID not null,
-	statId varchar(8) not null,
-	chgerId varchar(2) not null,
-	created_at TIMESTAMP not null,
-	unique (user_id, statId, chgerId),
-	FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE,
-	foreign key (chgerId) references charger(statId, chgerId) on delete cascade
 );
 create index idx_station_location on station using gist(location);

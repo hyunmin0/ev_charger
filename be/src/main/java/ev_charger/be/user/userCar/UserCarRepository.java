@@ -22,8 +22,6 @@ public interface UserCarRepository extends JpaRepository<UserCar, Long> {
 
     Boolean existsByUserAndCar(User User, Car car);
 
-    int countByUser(User user);
-
     @Query ("select uc.car from UserCar uc where uc.user= :user")
     // :user와 @Param("user")가 서로 매핑
     List<UserCar> findCarByUser(@Param("user") User user);

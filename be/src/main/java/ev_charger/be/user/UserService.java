@@ -1,7 +1,5 @@
 package ev_charger.be.user;
 
-import ev_charger.be.charger_alert.ChargerAlertRepository;
-import ev_charger.be.review.ReviewRepository;
 import ev_charger.be.user.userCar.UserCarRepository;
 import ev_charger.be.user.dto.response.UserResponse;
 import ev_charger.be.user.profileImage.ProfileImage;
@@ -19,8 +17,6 @@ import java.util.List;
 public class UserService {
     private final ProfileImageRepository profileImageRepository;
     private final UserCarRepository userCarRepository;
-    private final ReviewRepository reviewRepository;
-    private final ChargerAlertRepository chargerAlertRepository;
 
     /**
      * 닉네임 수정
@@ -55,16 +51,22 @@ public class UserService {
     /**
      * 프로필 조회
      * @param user
-     * @return nickname, email(없으면 null), profileImageUrl(없으면 null), 내 차량 수, 즐겨찾기 수, 충전기 알림 수
+     * @return nickname, email(없으면 null), profileImageUrl(없으면 null), model(없으면 빈 리스트)
      */
     public UserResponse getProfile(User user) {
+        List<UserCarResponse> cars = userCarRepository.findByUser(user)
+                .stream()
+                .map(uc -> new UserCarResponse(
+                        uc.getUserCarId(),
+                        uc.getCar().getCarName(),
+                        uc.getBatteryCapacity()
+                )).toList();
         return new UserResponse(
                 user.getNickname(),
                 user.getEmail(),
                 user.getProfileImage() != null ? user.getProfileImage().getImageUrl():null,
-                userCarRepository.countByUser(user),
-                reviewRepository.countByUser(user),
-                chargerAlertRepository.countByUser(user)
+                cars
         );
     }
+
 }
