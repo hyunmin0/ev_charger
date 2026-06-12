@@ -3,7 +3,7 @@ package ev_charger.be.review.dto.response;
 import java.time.LocalDateTime;
 import java.util.List;
 
-public record StationReviewsResponse(
+public record StationReviewResponse(
         Long reviewId,
         String nickname,
         String profileImageUrl,
@@ -11,6 +11,7 @@ public record StationReviewsResponse(
         String content,
         List<String> imageUrls,
         LocalDateTime createdAt,
+        boolean isMyReview, // 내 리뷰인가
         boolean isEdited
 ) {
 }

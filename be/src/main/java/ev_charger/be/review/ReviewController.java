@@ -1,7 +1,7 @@
 package ev_charger.be.review;
 
 import ev_charger.be.review.dto.request.ReviewRequest;
-import ev_charger.be.review.dto.response.StationReviewsResponse;
+import ev_charger.be.review.dto.response.StationReviewResponse;
 import ev_charger.be.review.dto.response.StationReviewsSummary;
 import ev_charger.be.review.dto.response.UserReviewsResponse;
 import ev_charger.be.security.CustomUserDetails;
@@ -11,6 +11,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/reviews")
@@ -67,9 +68,11 @@ public class ReviewController {
     // input : statId(String)
     // output: List<StationReviewsResponse>
     @GetMapping("/station/{statId}")
-    public ResponseEntity<List<StationReviewsResponse>> getReviewsByStation(
-            @PathVariable String statId) { //user없으니까 로그인 안해도됨
-        return ResponseEntity.ok(reviewService.getReviewsByStation(statId));
+    public ResponseEntity<List<StationReviewResponse>> getReviewsByStation(
+            @AuthenticationPrincipal CustomUserDetails userDetails, // 비로그인 시 null
+            @PathVariable String statId) {
+        return ResponseEntity.ok(reviewService.getReviewsByStation(
+                userDetails != null ? userDetails.getUser() : null, statId));
     }
 
     // 특정 충전소 별점 평균/리뷰 개수

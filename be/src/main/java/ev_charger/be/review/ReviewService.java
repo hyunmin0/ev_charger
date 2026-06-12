@@ -1,7 +1,7 @@
 package ev_charger.be.review;
 
 import ev_charger.be.review.dto.request.ReviewRequest;
-import ev_charger.be.review.dto.response.StationReviewsResponse;
+import ev_charger.be.review.dto.response.StationReviewResponse;
 import ev_charger.be.review.dto.response.StationReviewsSummary;
 import ev_charger.be.review.dto.response.UserReviewsResponse;
 import ev_charger.be.review.reviewImage.ReviewImage;
@@ -9,6 +9,7 @@ import ev_charger.be.review.reviewImage.ReviewImageRepository;
 import ev_charger.be.station.Station;
 import ev_charger.be.station.StationRepository;
 import ev_charger.be.user.User;
+import jakarta.annotation.Nullable;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -86,7 +87,7 @@ public class ReviewService {
     /**
      * 유저의 리뷰 조회
      * @param user
-     * @return 리뷰id, 충전소id, 충전소이름, 별점, 내용, 이미지링크리스트, 생성날짜, 수정여부
+     * @return 리뷰id, 충전소id, 충전소이름, 운영업체 이름, 주소, 별점, 내용, 이미지링크리스트, 생성날짜, 수정여부
      */
     public List<UserReviewsResponse> getReviewsByUser(User user) {
 
@@ -99,6 +100,8 @@ public class ReviewService {
                         r.getReviewId(),
                         r.getStation().getStatId(), // 리뷰를 통해 충전소로 이동할 수 있도록
                         r.getStation().getStatNm(),
+                        r.getStation().getStationOperator().getBusiNm(),
+                        r.getStation().getAddr(),
                         r.getRating(),
                         r.getContent(),
                         imageMap.getOrDefault(r.getReviewId(), List.of()), // 이미지 없으면 빈 리스트
@@ -114,7 +117,7 @@ public class ReviewService {
      * @param statId
      * @return 리뷰id, 유저 이름, 프로필사진url 별점, 내용, 이미지링크리스트, 생성날짜, 수정여부
      */
-    public List<StationReviewsResponse> getReviewsByStation(String statId) {
+    public List<StationReviewResponse> getReviewsByStation(@Nullable User user, String statId) {
         Station station = stationRepository.findById(statId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 충전소입니다."));
 
@@ -123,7 +126,7 @@ public class ReviewService {
         Map<Long, List<String>> imageMap = getImageMap(reviews);
 
         return reviews.stream()
-                .map(r -> new StationReviewsResponse(
+                .map(r -> new StationReviewResponse(
                         r.getReviewId(),
                         r.getUser().getNickname(),
                         r.getUser().getProfileImage() != null // 프로필 사진이 없으면 null
@@ -132,6 +135,8 @@ public class ReviewService {
                         r.getContent(),
                         imageMap.getOrDefault(r.getReviewId(), List.of()), // 이미지 없으면 빈 리스트
                         r.getCreatedAt(),
+                        // user가 없으면 false 반환
+                        r.getUser().equals(user),
                         !r.getCreatedAt().equals(r.getUpdatedAt()) // 수정여부
                 ))
                 .toList();
@@ -152,7 +157,7 @@ public class ReviewService {
     }
 
     /**
-     * 평균별점, 리뷰개수 -> 필요 없음
+     * 평균별점, 리뷰개수
      * @param statId
      * @return 평균별점, 리뷰개수
      */
@@ -165,11 +170,13 @@ public class ReviewService {
         List<Integer> ratings = reviewRepository.findRatingsByStation(station);
 
         // 별점 평균값
-        double averageRating = ratings.stream()
-                .mapToInt(rating -> rating) // Integer -> int
-                // average()는 IntStream에 있어서 mapToInt가 필요함
-                .average()// 평균 계산 결과: Optional<Double>
-                .orElse(0);
+        Double averageRating = ratings.isEmpty() ? null :
+                Math.round(
+                        ratings.stream()
+                        .mapToInt(r -> r) // Integer -> int
+                        // average()는 IntStream에 있어서 mapToInt가 필요함
+                        .average()// 평균 계산 결과: Optional<Double>
+                        .getAsDouble() * 10) / 10.0; // 소수점 첫째자리까지
 
         return new StationReviewsSummary(averageRating, ratings.size());
     }

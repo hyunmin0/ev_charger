@@ -196,10 +196,13 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
      * 네이티브 쿼리 결과(Tuple) -> StationResponse 변환
      * Number로 받는 이유: 정수형은 db에서 bigint, numeric으로 올 수 있어서 Integer.class로 바로 받으면 예외날 수 있음. -> Number로 받고 .intValue()로 변환
      * Double은 db의 float8이나 double precision이랑 타입이 맞아서 바로 받아도 됨
+     * List<?>: 타입을 모르는 리스트를 받을 때 쓰는 와일드카드(Tuple로 받으면 경고)
      */
     private List<StationResponse> toResponse(List<?> rows) {
         return rows.stream().map(r -> {
             Tuple row = (Tuple) r;
+            String parkingFree = row.get("parkingFree", String.class);
+            String limitYn = row.get("limitYn", String.class);
             return new StationResponse(
                     row.get("statId", String.class),
                     row.get("statNm", String.class),
@@ -207,8 +210,8 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
                     row.get("lat", Double.class),
                     row.get("lng", Double.class),
                     row.get("useTime", String.class),
-                    "Y".equals(row.get("parkingFree", String.class)),
-                    "N".equals(row.get("limitYn", String.class)),
+                    parkingFree != null ? "Y".equals(parkingFree) : null,
+                    limitYn != null ? "N".equals(limitYn) : null,
                     Kind.descriptionOf(row.get("kind", String.class)), // 시설명 문자열로
                     FloorType.descriptionOf(row.get("floorType", String.class)), // 지상/지하
                     row.get("hasFast", Boolean.class),

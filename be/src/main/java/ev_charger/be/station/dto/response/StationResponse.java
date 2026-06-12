@@ -7,8 +7,8 @@ public record StationResponse(
         double lat,
         double lng,
         String useTime,
-        boolean parkingFree,
-        boolean limitYn,
+        Boolean parkingFree,
+        Boolean openToPublic,
         String kind,
         String floorType,
         boolean hasFast, // 1개 이상이 급속

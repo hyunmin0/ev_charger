@@ -7,6 +7,8 @@ public record UserReviewsResponse(
     Long reviewId,
     String statId,
     String statNm,
+    String busiNm,
+    String addr,
     int rating,
     String content,
     List<String> imageUrls,

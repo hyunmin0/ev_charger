@@ -1,7 +1,7 @@
 package ev_charger.be.review.dto.response;
 
 public record StationReviewsSummary(
-        double averageRating,
+        Double averageRating,
         int reviewCount
 ) {
 }
