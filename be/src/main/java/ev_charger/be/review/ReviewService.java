@@ -152,7 +152,7 @@ public class ReviewService {
     }
 
     /**
-     * 평균별점, 리뷰개수
+     * 평균별점, 리뷰개수 -> 필요 없음
      * @param statId
      * @return 평균별점, 리뷰개수
      */

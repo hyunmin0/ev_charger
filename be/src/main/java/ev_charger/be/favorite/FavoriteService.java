@@ -2,7 +2,7 @@ package ev_charger.be.favorite;
 
 import ev_charger.be.station.Station;
 import ev_charger.be.station.StationRepository;
-import ev_charger.be.favorite.dto.response.FavoriteResponse;
+import ev_charger.be.station.dto.response.StationResponse;
 import ev_charger.be.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -62,19 +62,12 @@ public class FavoriteService {
      * @param user
      * @param lat
      * @param lng
-     * @return 충전소id, 이름, 주소, 거리, 등록날짜
+     * @return
      */
-    public  List<FavoriteResponse> getFavoriteList(User user, double lat, double lng) {
-        return favoriteRepository.findByUserWithStation(user.getUserId(), lat, lng)
-                .stream()
-                .map(p -> new FavoriteResponse(
-                        p.getStatId(),
-                        p.getStatNm(),
-                        p.getAddr(),
-                        p.getDistance(),
-                        p.getCreated()
-                )).toList();
+    public  List<StationResponse> getFavoriteList(User user, double lat, double lng) {
+        return stationRepository.findFavoriteStations(user.getUserId(), lat, lng);
     }
+
 
 }
 

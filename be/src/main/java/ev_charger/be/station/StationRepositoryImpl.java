@@ -12,8 +12,8 @@ import lombok.RequiredArgsConstructor;
 import org.hibernate.query.NativeQuery;
 import org.springframework.stereotype.Repository;
 
-import java.sql.SQLException;
 import java.util.List;
+import java.util.UUID;
 
 
 @Repository
@@ -35,23 +35,29 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
         // 기본 select
         StringBuilder sql = new StringBuilder("""
             select s.statId,
-                   s.statNm,
-                   s.addr,
-                   ST_Y(s.location::geometry) lat,
-                   ST_X(s.location::geometry) lng,
-                   s.useTime,
-                   s.parkingFree,
-                   s.limitYn,
-                   s.kind,
-                   s.floorType,
-                   array_agg(distinct c.chgerType) chgerTypes, -- 중복 제거 배열
-                   count(c.chgerId) totalCount,
-                   count(c.chgerId) filter (where c.stat in ('0', '9')) unknownCount,
-                   count(c.chgerId) filter (where c.stat = '2') availableCount,
-                   count(c.chgerId) filter (where c.stat = '3') inUseCount,
-                   count(c.chgerId) filter (where c.stat in ('1', '4', '5', '6') ) unavailableCount,
-                   ST_Distance(s.location, ST_MakePoint(:lng, :lat)::geography) distance -- 충전소 위치와 현 위치의 거리
-            from station s join charger c on c.statId = s.statId
+                s.statNm,
+                s.addr,
+                ST_Y(s.location::geometry) lat,
+                ST_X(s.location::geometry) lng,
+                s.useTime,
+                s.parkingFree,
+                s.limitYn,
+                s.kind,
+                s.floorType,
+                count(c.chgerType) filter (where c.chgerType not in ('02', '07', '08')) > 0 hasFast,
+                so.busiNm,
+                count(c.chgerId) totalCount,
+                count(c.chgerId) filter (where c.stat = '2') availableCount,
+                count(c.chgerId) filter (where c.stat = '3') > 0 hasCharging,
+                count(c.chgerId) filter (where c.stat in ('0', '9')) = count(c.chgerId) allUnknown,
+                count(c.chgerId) filter (where c.stat in ('1', '4', '5', '6')) = count(c.chgerId) allUnavailable,
+                round(avg(r.rating)::numeric, 1) averageRating,
+                count(r.review_id) reviewCount,
+                ST_Distance(s.location, ST_MakePoint(:lng, :lat)::geography) distance -- 충전소 위치와 현 위치의 거리
+            from station s
+                join charger c on s.statId = c.statId
+                join station_operator so on s.busiId = so.busiId
+                left join review r on r.statId = s.statId
             where ST_DWithin(s.location, ST_MakePoint(:lng, :lat)::geography, :range) -- range(반경) 안에 존재하는 경우
             """);
 
@@ -101,14 +107,20 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
             s.limitYn,
             s.kind,
             s.floorType,
-            array_agg(distinct c.chgerType) chgerTypes, -- 중복 제거 배열
+            count(c.chgerType) filter (where c.chgerType not in ('02', '07', '08')) > 0 hasFast,
+            so.busiNm,
             count(c.chgerId) totalCount,
-            count(c.chgerId) filter (where c.stat in ('0', '9'))  unknownCount,
             count(c.chgerId) filter (where c.stat = '2') availableCount,
-            count(c.chgerId) filter (where c.stat = '3') inUseCount,
-            count(c.chgerId) filter (where c.stat in ('1', '4', '5', '6')) unavailableCount,
+            count(c.chgerId) filter (where c.stat = '3') > 0 hasCharging,
+            count(c.chgerId) filter (where c.stat in ('0', '9')) = count(c.chgerId) allUnknown,
+            count(c.chgerId) filter (where c.stat in ('1', '4', '5', '6')) = count(c.chgerId) allUnavailable,
+            round(avg(r.rating)::numeric, 1) averageRating,
+            count(r.review_id) reviewCount,
             ST_Distance(s.location, ST_MakePoint(:userLng, :userLat)::geography) distance -- 충전소 위치와 현 위치의 거리
-            from station s join charger c on s.statId = c.statId
+            from station s
+                join charger c on s.statId = c.statId
+                join station_operator so on s.busiId = so.busiId
+                left join review r on r.statId = s.statId
             where ST_Within(s.location::geometry, ST_MakeEnvelope(:minLng, :minLat, :maxLng, :maxLat, 4326)) -- 위경도 최대최소 안에 존재하는 경우
             """);
 
@@ -127,6 +139,48 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
 
         // 공통 필터 파라미터 바인딩
         bindFilterParams(query, request.filter());
+
+        return toResponse(query.getResultList());
+    }
+
+
+    @Override
+    public List<StationResponse> findFavoriteStations(UUID userId, double lat, double lng) {
+        String sql = """
+            select s.statId,
+            s.statNm,
+            s.addr,
+            ST_Y(s.location::geometry) lat,
+            ST_X(s.location::geometry) lng,
+            s.useTime,
+            s.parkingFree,
+            s.limitYn,
+            s.kind,
+            s.floorType,
+            count(c.chgerType) filter (where c.chgerType not in ('02', '07', '08')) > 0 hasFast,
+            so.busiNm,
+            count(c.chgerId) totalCount,
+            count(c.chgerId) filter (where c.stat = '2') availableCount,
+            count(c.chgerId) filter (where c.stat = '3') > 0 hasCharging,
+            count(c.chgerId) filter (where c.stat in ('0', '9')) = count(c.chgerId) allUnknown,
+            count(c.chgerId) filter (where c.stat in ('1', '4', '5', '6')) = count(c.chgerId) allUnavailable,
+            round(avg(r.rating)::numeric, 1) averageRating,
+            count(r.review_id) reviewCount,
+            ST_Distance(s.location, ST_MakePoint(:userLng, :userLat)::geography) distance -- 충전소 위치와 현 위치의 거리
+            from station s
+                join charger c on s.statId = c.statId
+                join station_operator so on s.busiId = so.busiId
+                join favorite f on f.statId = s.statId
+                left join review r on r.statId = s.statId
+            where f.user_id = :userId
+            group by s.statId, s.statNm, s.addr, s.location, s.useTime, s.parkingFree, s.limitYn, s.kind, s.floorType, so.busiNm
+            order by f.created_at desc
+            """;
+
+        Query query = em.createNativeQuery(sql, Tuple.class);
+        query.setParameter("userId", userId);
+        query.setParameter("userLat", lat);
+        query.setParameter("userLng", lng);
 
         return toResponse(query.getResultList());
     }
@@ -157,24 +211,18 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
                     "N".equals(row.get("limitYn", String.class)),
                     Kind.descriptionOf(row.get("kind", String.class)), // 시설명 문자열로
                     FloorType.descriptionOf(row.get("floorType", String.class)), // 지상/지하
-                    toStringList((java.sql.Array) row.get("chgerTypes")),
+                    row.get("hasFast", Boolean.class),
+                    row.get("busiNm", String.class),
                     row.get("totalCount", Number.class).intValue(),
-                    row.get("unknownCount", Number.class).intValue(),
                     row.get("availableCount", Number.class).intValue(),
-                    row.get("inUseCount", Number.class).intValue(),
-                    row.get("unavailableCount", Number.class).intValue(),
+                    row.get("hasCharging", Boolean.class),
+                    row.get("allUnknown", Boolean.class),
+                    row.get("allUnavailable", Boolean.class),
+                    row.get("averageRating", Double.class),
+                    row.get("reviewCount", Number.class).intValue(),
                     row.get("distance", Double.class)
             );
         }).toList();
-    }
-
-    private List<String> toStringList(java.sql.Array array) {
-        if (array == null) return List.of();
-        try {
-            return List.of((String[]) array.getArray());
-        } catch (SQLException e) {
-            return List.of();
-        }
     }
 
     /**
@@ -195,13 +243,16 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
         if (hasValues(filter.kinds())) sql.append(" AND s.kind IN (:kinds)\n");
         if (hasValues(filter.floorTypes())) sql.append(" AND s.floorType IN (:floorTypes)\n");
 
-        // 집계 및 정렬
-        // availableOnly = true면 사용 가능한 충전기(stat='2')가 1개 이상인 충전소만 반환
+        // 집계
         sql.append("""
-            group by s.statId, s.statNm, s.addr, s.location, s.useTime, s.parkingFree, s.limitYn, s.kind, s.floorType
-            having (:availableOnly = false or count(c.chgerId) filter (where c.stat = '2') > 0) -- availableOnly = false면 전체 조회, true면 충전 가능한 충전소만 조회
-            order by distance -- 거리순
+            group by s.statId, s.statNm, s.addr, s.location, s.useTime, s.parkingFree, s.limitYn, s.kind, s.floorType, so.busiNm
             """);
+
+        // availableOnly = true면 사용 가능한 충전기(stat='2')가 1개 이상인 충전소만 반환
+        if (filter.availableOnly()) sql.append(" having count(c.chgerId) filter (where c.stat = '2') > 0 -- availableOnly = false면 전체 조회, true면 충전 가능한 충전소만 조회\n");
+
+        // 정렬
+        sql.append(" order by distance -- 거리순");
     }
 
     /**
@@ -210,8 +261,6 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
      * 리스트 파라미터(in 절)는 hibernate 전용 setParameterList 사용
      */
     private void bindFilterParams(Query query, StationFilter filter) {
-        // availableOnly는 항상 존재하므로 항상 바인딩
-        query.setParameter("availableOnly", filter.availableOnly());
 
         if (filter.minOutput() != null) query.setParameter("minOutput", filter.minOutput());
         if (filter.maxOutput() != null) query.setParameter("maxOutput", filter.maxOutput());

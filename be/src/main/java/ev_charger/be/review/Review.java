@@ -39,7 +39,7 @@ public class Review {
     @Column(nullable = false)
     private Integer rating;
 
-    @JoinColumn(name="lastId", nullable=false)
+    @JoinColumn(name="statId", nullable=false)
     @ManyToOne(fetch = FetchType.LAZY)
     private Station station;
 

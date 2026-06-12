@@ -1,7 +1,7 @@
 package ev_charger.be.favorite;
 
-import ev_charger.be.favorite.dto.response.FavoriteResponse;
 import ev_charger.be.security.CustomUserDetails;
+import ev_charger.be.station.dto.response.StationResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -40,9 +40,9 @@ public class FavoriteController {
 
     // 즐겨찾기 목록 조회
     // input : lat(double), lng(double) - 내 위치 (위도, 경도)
-    // output: List<FavoriteResponse> [{ statId, statNm, addr, distance, created }, ...]
+    // output: List<StationResponse> [{ statId, statNm, addr,}, ...]
     @GetMapping
-    public ResponseEntity<List<FavoriteResponse>> getFavoriteList(
+    public ResponseEntity<List<StationResponse>> getFavoriteList(
             @AuthenticationPrincipal CustomUserDetails userDetails, // 로그인한 유저
             @RequestParam double lat,                               // 내 위도
             @RequestParam double lng) {                             // 내 경도
