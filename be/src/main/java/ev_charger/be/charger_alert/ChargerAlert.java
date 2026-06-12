@@ -17,7 +17,7 @@ import java.time.LocalDateTime;
 @Getter
 @NoArgsConstructor(access= AccessLevel.PROTECTED)
 @EntityListeners(AuditingEntityListener.class) // created 자동 시간 측정
-@Table(name="favorite", uniqueConstraints = {@UniqueConstraint(columnNames = {"user_id", "statId", "chgerId"})})
+@Table(name="charger_alert", uniqueConstraints = {@UniqueConstraint(columnNames = {"user_id", "statId", "chgerId"})})
 public class ChargerAlert {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -28,11 +28,10 @@ public class ChargerAlert {
     @ManyToOne(fetch = FetchType.LAZY)
     private User user;
 
-    @JoinColumn(name = "statId", nullable = false)
-    @ManyToOne(fetch = FetchType.LAZY)
-    private Station station;
-
-    @JoinColumn(name = "chgerId", nullable = false)
+    @JoinColumns({
+        @JoinColumn(name = "chgerId", nullable = false),
+        @JoinColumn(name = "statId", nullable = false)
+    })
     @ManyToOne(fetch = FetchType.LAZY)
     private Charger charger;
 
@@ -41,9 +40,8 @@ public class ChargerAlert {
     private LocalDateTime createdAt;
 
     @Builder
-    public ChargerAlert(User user, Station station, Charger charger) {
+    public ChargerAlert(User user, Charger charger) {
         this.user = user;
-        this.station = station;
         this.charger = charger;
     }
 }
