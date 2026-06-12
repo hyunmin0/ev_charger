@@ -17,4 +17,5 @@ public interface FavoriteRepository extends JpaRepository<Favorite, Long> {
 
     void deleteByUserAndStation(User user, Station station);
 
+    int countByUser(User user);
 }
