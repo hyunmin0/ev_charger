@@ -31,7 +31,7 @@ public class SecurityConfig {
                 .csrf(csrf->csrf.disable())
                 // 요청별 권한 설정
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/","/auth/**", "/reviews/station/**").permitAll() // 해당 요청이 오면 접근 허용
+                        .requestMatchers("/","/auth/**", "/reviews/station/**", "/stations/**").permitAll() // 해당 요청이 오면 접근 허용
                         .anyRequest().authenticated() // 다른 요청의 경우 인증 필요 (없는 경우: 접근 제한 페이지를 보여줌)
                 )
                 // 세션 사용 안함  (jwt: stateless)

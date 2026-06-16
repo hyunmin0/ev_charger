@@ -70,13 +70,20 @@ public class StationService {
         return stationRepository.findStationsInBoundsWithFilter(request);
     }
 
-
+    /**
+     * 충전소 상세 조회
+     * @param user nullable
+     * @param statId 충전소id
+     * @return StationDetailResponse
+     */
     public StationDetailResponse getStationDetail(@Nullable User user, String statId) {
         Station station = stationRepository.findById(statId)
                 .orElseThrow(() -> new IllegalArgumentException("유효하지 않은 충전소입니다."));
         StationOperator operator = station.getStationOperator();
 
         List<Charger> chargers = chargerRepository.findByStatId(statId);
+
+        // 비로그인 시 null, 로그인 시 알림 설정된 충전기id
         List<String> alertedIds = user != null
                 ? chargerAlertRepository.findByUserAndCharger_StatId(user, statId)
                 .stream().map(ca -> ca.getCharger().getChgerId())

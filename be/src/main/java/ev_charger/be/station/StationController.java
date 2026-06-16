@@ -1,11 +1,14 @@
 package ev_charger.be.station;
 
+import ev_charger.be.security.CustomUserDetails;
 import ev_charger.be.station.dto.request.MapBoundsRequest;
 import ev_charger.be.station.dto.request.NearbyStationRequest;
 import ev_charger.be.station.dto.response.NearbyStationPageResponse;
+import ev_charger.be.station.dto.response.StationDetailResponse;
 import ev_charger.be.station.dto.response.StationResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -33,5 +36,18 @@ public class StationController {
     public ResponseEntity<List<StationResponse>> getStationsInBounds(
             @ModelAttribute MapBoundsRequest request) { // URL 파라미터를 DTO로 한번에 받음
         return ResponseEntity.ok(stationService.getStationsInBounds(request));
+    }
+
+    /**
+     * 충전소 상세 조회
+     * @param userDetails
+     * @param statId
+     * @return StationsDetailResponse
+     */
+    @GetMapping("/{statId}")
+    public ResponseEntity<StationDetailResponse> getStationDetail(
+            @AuthenticationPrincipal CustomUserDetails userDetails, // 비로그인 시 null
+            @PathVariable String statId) {
+        return ResponseEntity.ok(stationService.getStationDetail(userDetails.getUser(), statId));
     }
 }
