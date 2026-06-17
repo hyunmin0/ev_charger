@@ -48,6 +48,11 @@ dependencies {
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
     // spring boot web 스타터
     implementation 'org.springframework.boot:spring-boot-starter-web'
+    // FCM
+    implementation 'com.google.firebase:firebase-admin:9.2.0'
+    // 재시도(@Retryable)
+    implementation 'org.springframework.retry:spring-retry:2.0.11'
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
 }
 
 tasks.named('test') {

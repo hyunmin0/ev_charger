@@ -1,7 +1,9 @@
 package ev_charger.be.charger_alert;
 
+import ev_charger.be.charger_alert.dto.request.ChargerStatusRequest;
 import ev_charger.be.charger_alert.dto.response.UserChargerAlertResponse;
 import ev_charger.be.common.enums.YN;
+import ev_charger.be.config.FcmService;
 import ev_charger.be.station.Station;
 import ev_charger.be.station.StationRepository;
 import ev_charger.be.station.charger.Charger;
@@ -12,12 +14,16 @@ import ev_charger.be.station.enums.FloorType;
 import ev_charger.be.station.enums.Kind;
 import ev_charger.be.station.stationOperator.StationOperator;
 import ev_charger.be.user.User;
+import ev_charger.be.user.fcmToken.FcmToken;
+import ev_charger.be.user.fcmToken.FcmTokenRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,7 +33,9 @@ public class ChargerAlertService {
 
     private final ChargerRepository  chargerRepository;
     private final ChargerAlertRepository  chargerAlertRepository;
-    private final StationRepository stationRepository;
+    private final FcmTokenRepository fcmTokenRepository;
+
+    private final FcmService fcmService;
 
     /**
      * 알림 추가
@@ -118,5 +126,25 @@ public class ChargerAlertService {
                             alertedChargers
                             );
                 }).toList();
+    }
+
+    /**
+     * 각 유저에게 fcm send
+     * @param chargers
+     */
+    public void notifyWaitingChargers(List<ChargerStatusRequest> chargers) {
+        List<ChargerAlert> alerts = chargers.stream()
+                .flatMap(cs -> chargerAlertRepository.findByCharger_StatIdAndCharger_ChgerId(
+                        cs.statId(), cs.chgerId()
+                ).stream()).toList();
+
+        Set<User> users = alerts.stream()
+                .map(ChargerAlert::getUser)
+                .collect(Collectors.toSet());
+
+        List<FcmToken> fcmTokens = fcmTokenRepository.findByUserIn(users);
+
+        fcmTokens.forEach(token ->
+                fcmService.send(token.getToken(), "충전기 사용 가능", "알림 설정한 충전기가 사용 가능합니다."));
     }
 }

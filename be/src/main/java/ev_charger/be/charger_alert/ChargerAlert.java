@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
 @Entity
 @Getter
 @NoArgsConstructor(access= AccessLevel.PROTECTED)
-@EntityListeners(AuditingEntityListener.class) // created 자동 시간 측정
+@EntityListeners(AuditingEntityListener.class) // createdAt 자동 시간 측정
 @Table(name="charger_alert", uniqueConstraints = {@UniqueConstraint(columnNames = {"user_id", "statId", "chgerId"})})
 public class ChargerAlert {
     @Id

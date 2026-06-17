@@ -11,6 +11,8 @@ public interface ChargerAlertRepository extends JpaRepository<ChargerAlert,Long>
     int countByUser(User user);
 
     List<ChargerAlert> findByUserAndCharger_StatId(User user, String statId);
+
+    List<ChargerAlert> findByCharger_StatIdAndCharger_ChgerId(String statId, String chgerId);
     List<ChargerAlert> findByUser(User user);
 
     void deleteByUserAndCharger(User user, Charger charger);
