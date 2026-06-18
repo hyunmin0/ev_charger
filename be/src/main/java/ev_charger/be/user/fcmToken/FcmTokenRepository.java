@@ -12,4 +12,7 @@ public interface FcmTokenRepository extends JpaRepository<FcmToken, Long> {
     List<FcmToken> findByUserIn(Collection<User> users);
 
     void deleteByToken(String token);
+    void deleteByUserAndToken(User user, String token);
+
+    boolean existsByUserAndToken(User user, String token);
 }

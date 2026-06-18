@@ -122,4 +122,11 @@ create table charger_alert(
 	FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE,
 	foreign key (chgerId) references charger(statId, chgerId) on delete cascade
 );
+create table fcm_token(
+	id BIGINT generated always as identity primary key,
+	user_id UUID not null,
+	token varchar(255) not null unique,
+	created_at timestamp not null,
+	foreign key (user_id) references users (user_id) on delete cascade
+);
 create index idx_station_location on station using gist(location);

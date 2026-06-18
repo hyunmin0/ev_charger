@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/internal/charger-alerts")
+@RequestMapping("/internal/charger-alerts") // internal: client에서 접근 x
 @RequiredArgsConstructor
 public class ChargerAlertController {
 
@@ -20,6 +20,12 @@ public class ChargerAlertController {
     @Value("${internal.secret-key}")
     private String internalSecretKey;
 
+    /**
+     * 업데이트된 사용가능한 충전기 정보를 받아 해당하는 user에게 알림 발송
+     * client에서 접근 x (파이썬 서버 -> 백엔드)
+     * @param internalKey 파이썬 서버를 확인하는 key
+     * @param chargers charStat = 02(=waiting)인 (statId, chgerId)의 리스트
+     */
     @PostMapping("/notify")
     public ResponseEntity<Void> notifyChargerAlert(
             @RequestHeader("X-Internal-Key") String internalKey,
@@ -30,6 +36,7 @@ public class ChargerAlertController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
+        // chargerAlert에 해당하는 user에서 fcm 발송
         chargerAlertService.notifyWaitingChargers(chargers);
 
         return ResponseEntity.ok().build();
