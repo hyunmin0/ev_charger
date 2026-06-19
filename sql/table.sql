@@ -129,4 +129,20 @@ create table fcm_token(
 	created_at timestamp not null,
 	foreign key (user_id) references users (user_id) on delete cascade
 );
+create table notice(
+	-- 구현하기
+);
+create table notification_history(
+	id BIGINT generated always as identity primary key,
+	alert_id BIGINT,
+	notice_id BIGINT,
+	user_id UUID not null,
+	read_at timestamp,
+	foreign key (user_id) references users (user_id) on delete cascade,
+	foreign key (alert_id) references charger_alert(alert_id) on delete cascade,
+	foreign key (notice_id) references notice(notice_id) on delete cascade,
+	check (
+		(alert_id is not null)::int + (notice_id is not null)::int = 1
+	) -- alert, notice 둘 중 하나는 not null이어야 함
+);
 create index idx_station_location on station using gist(location);

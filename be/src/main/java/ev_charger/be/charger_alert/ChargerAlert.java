@@ -1,6 +1,5 @@
 package ev_charger.be.charger_alert;
 
-import ev_charger.be.station.Station;
 import ev_charger.be.station.charger.Charger;
 import ev_charger.be.user.User;
 import jakarta.persistence.*;
@@ -9,14 +8,12 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
 
 @Entity
 @Getter
 @NoArgsConstructor(access= AccessLevel.PROTECTED)
-@EntityListeners(AuditingEntityListener.class) // createdAt 자동 시간 측정
 @Table(name="charger_alert", uniqueConstraints = {@UniqueConstraint(columnNames = {"user_id", "statId", "chgerId"})})
 public class ChargerAlert {
     @Id

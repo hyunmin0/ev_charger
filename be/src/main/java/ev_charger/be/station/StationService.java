@@ -4,8 +4,6 @@ import ev_charger.be.charger_alert.ChargerAlertRepository;
 import ev_charger.be.common.CursorUtils;
 import ev_charger.be.common.enums.YN;
 import ev_charger.be.favorite.FavoriteRepository;
-import ev_charger.be.review.Review;
-import ev_charger.be.review.ReviewRepository;
 import ev_charger.be.review.ReviewService;
 import ev_charger.be.review.dto.response.StationReviewResponse;
 import ev_charger.be.review.dto.response.StationReviewsSummary;
@@ -27,10 +25,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
-import java.util.Set;
 
 @Service
 @Transactional(readOnly = true)

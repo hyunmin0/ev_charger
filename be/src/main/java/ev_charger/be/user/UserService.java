@@ -6,12 +6,9 @@ import ev_charger.be.user.userCar.UserCarRepository;
 import ev_charger.be.user.dto.response.UserResponse;
 import ev_charger.be.user.profileImage.ProfileImage;
 import ev_charger.be.user.profileImage.ProfileImageRepository;
-import ev_charger.be.user.userCar.dto.response.UserCarResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
