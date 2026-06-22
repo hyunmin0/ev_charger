@@ -47,7 +47,7 @@ public class NoticeService {
 
         notificationHistoryService.save(user, notice);
 
-    return new NoticeResponse(notice.getNoticeId(), notice.getTitle(), notice.getContent(), notice.getCreatedAt());
+        return new NoticeResponse(notice.getNoticeId(), notice.getTitle(), notice.getContent(), notice.getCreatedAt());
     }
 
     // 공지 목록 조회

@@ -41,4 +41,12 @@ public class NotificationHistoryService {
                         .user(user)
                         .build());
     }
+
+    @Transactional
+    public void markAsRead(User user, Long id) {
+        NotificationHistory history = notificationHistoryRepository.findByIdAndUser(id, user)
+                .orElseThrow(() -> new IllegalArgumentException("알림 기록이 없습니다."));
+
+        history.updateIsRead();
+    }
 }

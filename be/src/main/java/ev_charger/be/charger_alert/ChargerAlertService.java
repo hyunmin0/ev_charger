@@ -4,6 +4,8 @@ import ev_charger.be.charger_alert.dto.request.ChargerStatusRequest;
 import ev_charger.be.charger_alert.dto.response.UserChargerAlertResponse;
 import ev_charger.be.common.enums.YN;
 import ev_charger.be.config.FcmService;
+import ev_charger.be.notification.NotificationHistoryRepository;
+import ev_charger.be.notification.NotificationHistoryService;
 import ev_charger.be.station.Station;
 import ev_charger.be.station.charger.Charger;
 import ev_charger.be.station.charger.ChargerRepository;
@@ -32,9 +34,10 @@ public class ChargerAlertService {
     private final FcmTokenRepository fcmTokenRepository;
 
     private final FcmService fcmService;
+    private final NotificationHistoryService notificationHistoryService;
 
     /**
-     * 알림 추가
+     * user가 알림 추가
      * @param user
      * @param statId
      * @param chgerId
@@ -128,11 +131,15 @@ public class ChargerAlertService {
      * 각 유저에게 fcm send
      * @param chargers
      */
+    @Transactional
     public void notifyWaitingChargers(List<ChargerStatusRequest> chargers) {
         List<ChargerAlert> alerts = chargers.stream()
                 .flatMap(cs -> chargerAlertRepository.findByCharger_StatIdAndCharger_ChgerId(
                         cs.statId(), cs.chgerId()
                 ).stream()).toList();
+
+        // 알림 기록 저장(isRead = false)
+        alerts.forEach(notificationHistoryService::save);
 
         Set<User> users = alerts.stream()
                 .map(ChargerAlert::getUser)

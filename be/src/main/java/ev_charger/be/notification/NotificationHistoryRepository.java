@@ -13,6 +13,8 @@ import java.util.Optional;
 public interface NotificationHistoryRepository extends JpaRepository<NotificationHistory, Long> {
     List<NotificationHistory> findByUserAndNoticeIn(User user, List<Notice> notices);
 
+    Optional<NotificationHistory> findByIdAndUser(Long id, User user);
+
     List<NotificationHistory> findByUserAndAlertIn(User user, List<ChargerAlert> alerts);
 
     boolean existsByUserAndNotice(User user, Notice notice);

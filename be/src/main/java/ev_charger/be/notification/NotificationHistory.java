@@ -36,9 +36,12 @@ public class NotificationHistory {
     @ManyToOne(fetch = FetchType.LAZY)
     private User user;
 
+    @Column(nullable = false, name = "is_read")
+    private boolean isRead = false; // 기본값: false
+
     @CreatedDate
-    @Column(name="read_at", nullable = false, updatable = false)
-    private LocalDateTime readAt;
+    @Column(name="create_at", nullable = false, updatable = false)
+    private LocalDateTime creatAt;
 
     @Builder(builderMethodName = "alertBuilder")
     public NotificationHistory(ChargerAlert alert, User user) {
@@ -50,5 +53,10 @@ public class NotificationHistory {
     public NotificationHistory(Notice notice, User user) {
         this.notice = notice;
         this.user = user;
+        this.isRead = true; // 읽었을 때만 저장
+    }
+
+    public void updateIsRead() {
+        this.isRead = true;
     }
 }
