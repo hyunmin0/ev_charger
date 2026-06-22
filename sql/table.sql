@@ -6,6 +6,7 @@ create table profile_image (
 );
 create table users (
 	user_id uuid primary key DEFAULT gen_random_uuid(),
+	role varchar(20) not null default 'USER' check (role in ('ADMIN', 'USER')),
 	nickname varchar(50) not null,
 	profile_image_id int,
 	email varchar(255) check(email like '%@%'),
@@ -130,7 +131,10 @@ create table fcm_token(
 	foreign key (user_id) references users (user_id) on delete cascade
 );
 create table notice(
-	-- 구현하기
+	notice_id BIGINT generated alwyas as identity primary key,
+	title varchar(255) not null,
+	content varchar(512) not null,
+	created_at timestamp not null
 );
 create table notification_history(
 	id BIGINT generated always as identity primary key,

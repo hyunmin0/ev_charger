@@ -1,6 +1,7 @@
 package ev_charger.be.user;
 
 import ev_charger.be.user.enums.Provider;
+import ev_charger.be.user.enums.Role;
 import ev_charger.be.user.profileImage.ProfileImage;
 import jakarta.persistence.*;
 import lombok.*;
@@ -19,6 +20,10 @@ public class User {
     @Column(name="user_id")
     @GeneratedValue(strategy = GenerationType.UUID) // id 값을 자동 생성
     private UUID userId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private Role role = Role.USER;
 
     @Column(nullable=false, length=50)
     private String nickname;
@@ -50,13 +55,11 @@ public class User {
         this.refreshToken = refreshToken;
     }
 
-
-    public void updateRefreshToken(String refreshToken){
-    this.refreshToken = refreshToken;
-}
+    public void updateRefreshToken(String refreshToken){ this.refreshToken = refreshToken; }
 
     public void updateNickname(String newName) { this.nickname = newName; }
 
-    public void updateProfileImage(ProfileImage newProfileImage) {this.profileImage = newProfileImage; }
+    public void updateProfileImage(ProfileImage newProfileImage) { this.profileImage = newProfileImage; }
 
+    public  void promoteToAdmin() { this.role = Role.ADMIN; }
 }

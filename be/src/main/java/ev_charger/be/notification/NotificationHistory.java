@@ -8,6 +8,7 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
@@ -35,7 +36,8 @@ public class NotificationHistory {
     @ManyToOne(fetch = FetchType.LAZY)
     private User user;
 
-    @Column(name="read_at")
+    @CreatedDate
+    @Column(name="read_at", nullable = false, updatable = false)
     private LocalDateTime readAt;
 
     @Builder(builderMethodName = "alertBuilder")
@@ -48,10 +50,5 @@ public class NotificationHistory {
     public NotificationHistory(Notice notice, User user) {
         this.notice = notice;
         this.user = user;
-    }
-
-    // 어노테이션 없이 read at 기록
-    public void markAsRead() {
-        this.readAt = LocalDateTime.now();
     }
 }

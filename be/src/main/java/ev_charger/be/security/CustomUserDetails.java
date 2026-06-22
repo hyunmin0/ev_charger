@@ -18,8 +18,8 @@ public class CustomUserDetails implements UserDetails {
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         // ROLE_USER: 일반 유저
-        // 이후에 권한 추가
-        return List.of(new SimpleGrantedAuthority("ROLE_USER"));
+        // ROLE_ADMIN: 관리자
+        return List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole()));
     }
 
     // Spring Security 식별자로 userId 사용

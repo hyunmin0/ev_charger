@@ -19,6 +19,9 @@ public class NotificationHistoryService {
     // save(charger) - ChargerAlertService에서 이미 ChargerAlert를 들고 있을 거기 때문에 객체를 받는 게 효율적임
     @Transactional
     public void save(ChargerAlert alert) {
+        if (notificationHistoryRepository.existsByAlert(alert)) { // ChargerAlert는 처음부터 user에게 종속되어 있는 1:1 관계이므로 alert로만 확인 가능(user X)
+            return; // 이미 읽음 기록 있으면 중복 생성 안 함
+        }
         notificationHistoryRepository.save(
                 NotificationHistory.alertBuilder()
                 .alert(alert)
@@ -29,29 +32,13 @@ public class NotificationHistoryService {
     // notice는 User가 없으므로 User가 필요함
     @Transactional
     public void save(User user, Notice notice) {
+        if (notificationHistoryRepository.existsByUserAndNotice(user, notice)) { // notice는 모든 유저에게 공유되기에 해당 유저에 한해서 읽었는지 확인해야 함
+            return; // 이미 읽음 기록 있으면 중복 생성 안 함
+        }
         notificationHistoryRepository.save(
                 NotificationHistory.noticeBuilder()
                         .notice(notice)
                         .user(user)
                         .build());
     }
-
-    // 사용자 알림 목록 조회(프론트의 안읽음/읽음 구분용)
-    public List<NotificationHistory> getHistory(User user) {
-        return notificationHistoryRepository.findByUser(user);
-    }
-
-    // 읽음 처리
-    @Transactional
-    public void markAsRead(User user, long notificationId) {
-        NotificationHistory history = notificationHistoryRepository.findById(notificationId)
-                .orElseThrow(() -> new IllegalArgumentException("유효한 공지가 아닙니다."));
-
-        if (!history.getUser().getUserId().equals(user.getUserId())){
-            throw new IllegalArgumentException("해당 사용자의 공지가 아닙니다.");
-        }
-
-        history.markAsRead();
-    }
-
 }
