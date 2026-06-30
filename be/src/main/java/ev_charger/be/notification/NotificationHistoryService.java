@@ -7,7 +7,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 
 @Service
 @Transactional(readOnly = true)
@@ -18,15 +17,17 @@ public class NotificationHistoryService {
 
     // save(charger) - ChargerAlertService에서 이미 ChargerAlert를 들고 있을 거기 때문에 객체를 받는 게 효율적임
     @Transactional
-    public void save(ChargerAlert alert) {
+    public NotificationHistory save(ChargerAlert alert) {
         if (notificationHistoryRepository.existsByAlert(alert)) { // ChargerAlert는 처음부터 user에게 종속되어 있는 1:1 관계이므로 alert로만 확인 가능(user X)
-            return; // 이미 읽음 기록 있으면 중복 생성 안 함
+            return notificationHistoryRepository.findByAlert(alert); // 이미 읽음 기록 있으면 중복 생성 안 함
         }
         notificationHistoryRepository.save(
                 NotificationHistory.alertBuilder()
                 .alert(alert)
                 .user(alert.getUser())
                         .build());
+
+        return notificationHistoryRepository.findByAlert(alert);
     }
 
     // notice는 User가 없으므로 User가 필요함

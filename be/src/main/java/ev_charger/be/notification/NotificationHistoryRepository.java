@@ -15,6 +15,8 @@ public interface NotificationHistoryRepository extends JpaRepository<Notificatio
 
     Optional<NotificationHistory> findByIdAndUser(Long id, User user);
 
+    NotificationHistory findByAlert(ChargerAlert alert);
+
     List<NotificationHistory> findByUserAndAlertIn(User user, List<ChargerAlert> alerts);
 
     boolean existsByUserAndNotice(User user, Notice notice);
