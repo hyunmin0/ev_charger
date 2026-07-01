@@ -7,6 +7,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.Optional;
+
 
 @Service
 @Transactional(readOnly = true)
@@ -18,16 +21,11 @@ public class NotificationHistoryService {
     // save(charger) - ChargerAlertService에서 이미 ChargerAlert를 들고 있을 거기 때문에 객체를 받는 게 효율적임
     @Transactional
     public NotificationHistory save(ChargerAlert alert) {
-        if (notificationHistoryRepository.existsByAlert(alert)) { // ChargerAlert는 처음부터 user에게 종속되어 있는 1:1 관계이므로 alert로만 확인 가능(user X)
-            return notificationHistoryRepository.findByAlert(alert); // 이미 읽음 기록 있으면 중복 생성 안 함
-        }
-        notificationHistoryRepository.save(
+        return notificationHistoryRepository.save(
                 NotificationHistory.alertBuilder()
-                .alert(alert)
+                .charger(alert.getCharger())
                 .user(alert.getUser())
                         .build());
-
-        return notificationHistoryRepository.findByAlert(alert);
     }
 
     // notice는 User가 없으므로 User가 필요함
@@ -43,11 +41,25 @@ public class NotificationHistoryService {
                         .build());
     }
 
+    /**
+     * 충전기 알림 읽음 처리
+     * @param user
+     * @param id
+     */
     @Transactional
     public void markAsRead(User user, Long id) {
         NotificationHistory history = notificationHistoryRepository.findByIdAndUser(id, user)
                 .orElseThrow(() -> new IllegalArgumentException("알림 기록이 없습니다."));
 
         history.updateIsRead();
+    }
+
+    /**
+     * 충전기 알림 기록 자동 삭제(일주일)
+     */
+    @Transactional
+    public void deleteExpiredAlertHistories() {
+        // 일주일 전 시간이랑 비교해서 createAt가 더 작으면 삭제
+        notificationHistoryRepository.deleteByChgerIdIsNotNullAndCreatedAtBefore(LocalDateTime.now().minusWeeks(1)); // 현 시각 - 7일
     }
 }

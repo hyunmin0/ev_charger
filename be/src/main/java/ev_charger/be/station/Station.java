@@ -18,22 +18,22 @@ import org.locationtech.jts.geom.Point;
 public class Station {
 
     @Id
-    @Column(length = 8, nullable = false)
+    @Column(name = "statId", length = 8, nullable = false)
     private String statId;
 
-    @Column(length = 100, nullable = false)
+    @Column(name = "statNm", length = 100, nullable = false)
     private String statNm;
 
     @Column(length = 150, nullable = false)
     private String addr;
 
-    @Column(length = 200)
+    @Column(name = "addrDetail", length = 200)
     private String addrDetail;
 
     @Column(columnDefinition = "geography(Point, 4326)", nullable = false)
     private Point location;
 
-    @Column(length = 50, nullable = false)
+    @Column(name = "useTime", length = 50, nullable = false)
     private String useTime;
 
     @JoinColumn(name = "busiId")
@@ -48,27 +48,27 @@ public class Station {
     @Column(length = 2)
     private Kind kind;
 
-    @Column(length = 4)
+    @Column(name = "kindDetail", length = 4)
     private String kindDetail;
 
     @Enumerated(EnumType.STRING)
-    @Column(length = 1)
+    @Column(name = "parkingFree", length = 1)
     private YN parkingFree;
 
     @Column(length = 200)
     private String note;
 
     @Enumerated(EnumType.STRING)
-    @Column(length = 1)
+    @Column(name = "limitYn", length = 1)
     private YN limitYn;
 
-    @Column(length = 100)
+    @Column(name = "limitDetail", length = 100)
     private String limitDetail;
 
-    @Column(length = 50)
+    @Column(name = "floorNum", length = 50)
     private String floorNum;
 
     @Enumerated(EnumType.STRING)
-    @Column(length = 2)
+    @Column(name = "floorType", length = 2)
     private FloorType floorType;
 }
