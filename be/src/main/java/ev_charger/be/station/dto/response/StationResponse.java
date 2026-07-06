@@ -1,5 +1,7 @@
 package ev_charger.be.station.dto.response;
 
+import ev_charger.be.station.congestion.CongestionLevel;
+
 public record StationResponse(
         String statId,
         String statNm,
@@ -20,6 +22,7 @@ public record StationResponse(
         boolean allUnavailable, // 전체가 stat in (1, 4, 5, 6)
         Double averageRating, // 리뷰 없을 땐 null
         int reviewCount,
-        double distance // m
+        double distance, // m
+        CongestionLevel nextHourCongestionLevel // 여유, 보통, 혼잡
 ) {
 }

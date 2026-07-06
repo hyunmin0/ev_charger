@@ -1,5 +1,6 @@
 package ev_charger.be.station;
 
+import ev_charger.be.station.congestion.CongestionLevel;
 import ev_charger.be.station.dto.request.MapBoundsRequest;
 import ev_charger.be.station.dto.request.NearbyStationRequest;
 import ev_charger.be.station.dto.response.StationResponse;
@@ -53,11 +54,19 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
                 count(c.chgerId) filter (where c.stat in ('1', '4', '5', '6')) = count(c.chgerId) allUnavailable,
                 round(avg(r.rating)::numeric, 1) averageRating,
                 count(r.review_id) reviewCount,
-                ST_Distance(s.location, ST_MakePoint(:lng, :lat)::geography) distance -- 충전소 위치와 현 위치의 거리
+                ST_Distance(s.location, ST_MakePoint(:lng, :lat)::geography) distance, -- 충전소 위치와 현 위치의 거리
+                cg.congestionLevel nextHourCongestionLevel
             from station s
                 join charger c on s.statId = c.statId
                 join station_operator so on s.busiId = so.busiId
                 left join review r on r.statId = s.statId
+                left join lateral ( -- lateral join: 바깥 값 참조 가능, 바깥 테이블의 각 행마다 재실행
+                    select cg.congestionLevel
+                    from congestion cg
+                    where cg.statId = s.statId and cg.targetTime = 1
+                    order by cg.predictedAt desc
+                    limit 1
+                    ) cg on true -- 조인 조건이 없음을 의미
             where ST_DWithin(s.location, ST_MakePoint(:lng, :lat)::geography, :range) -- range(반경) 안에 존재하는 경우
             """);
 
@@ -116,11 +125,19 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
             count(c.chgerId) filter (where c.stat in ('1', '4', '5', '6')) = count(c.chgerId) allUnavailable,
             round(avg(r.rating)::numeric, 1) averageRating,
             count(r.review_id) reviewCount,
-            ST_Distance(s.location, ST_MakePoint(:userLng, :userLat)::geography) distance -- 충전소 위치와 현 위치의 거리
+            ST_Distance(s.location, ST_MakePoint(:userLng, :userLat)::geography) distance, -- 충전소 위치와 현 위치의 거리
+            cg.congestionLevel nextHourCongestionLevel
             from station s
                 join charger c on s.statId = c.statId
                 join station_operator so on s.busiId = so.busiId
                 left join review r on r.statId = s.statId
+                left join lateral ( -- lateral join: 바깥 값 참조 가능, 바깥 테이블의 각 행마다 재실행
+                    select cg.congestionLevel
+                    from congestion cg
+                    where cg.statId = s.statId and cg.targetTime = 1
+                    order by cg.predictedAt desc
+                    limit 1
+                    ) cg on true -- 조인 조건이 없음을 의미
             where ST_Within(s.location::geometry, ST_MakeEnvelope(:minLng, :minLat, :maxLng, :maxLat, 4326)) -- 위경도 최대최소 안에 존재하는 경우
             """);
 
@@ -166,14 +183,22 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
             count(c.chgerId) filter (where c.stat in ('1', '4', '5', '6')) = count(c.chgerId) allUnavailable,
             round(avg(r.rating)::numeric, 1) averageRating,
             count(r.review_id) reviewCount,
-            ST_Distance(s.location, ST_MakePoint(:userLng, :userLat)::geography) distance -- 충전소 위치와 현 위치의 거리
+            ST_Distance(s.location, ST_MakePoint(:userLng, :userLat)::geography) distance, -- 충전소 위치와 현 위치의 거리
+            cg.congestionLevel nextHourCongestionLevel
             from station s
                 join charger c on s.statId = c.statId
                 join station_operator so on s.busiId = so.busiId
                 join favorite f on f.statId = s.statId
                 left join review r on r.statId = s.statId
+                left join lateral ( -- lateral join: 바깥 값 참조 가능, 바깥 테이블의 각 행마다 재실행
+                    select cg.congestionLevel
+                    from congestion cg
+                    where cg.statId = s.statId and cg.targetTime = 1
+                    order by cg.predictedAt desc
+                    limit 1
+                    ) cg on true -- 조인 조건이 없음을 의미
             where f.user_id = :userId
-            group by s.statId, s.statNm, s.addr, s.location, s.useTime, s.parkingFree, s.limitYn, s.kind, s.floorType, so.busiNm
+            group by s.statId, s.statNm, s.addr, s.location, s.useTime, s.parkingFree, s.limitYn, s.kind, s.floorType, so.busiNm, cg.congestionLevel
             order by f.created_at desc
             """;
 
@@ -223,7 +248,8 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
                     row.get("allUnavailable", Boolean.class),
                     row.get("averageRating", Double.class),
                     row.get("reviewCount", Number.class).intValue(),
-                    row.get("distance", Double.class)
+                    row.get("distance", Double.class),
+                    row.get("nextHourCongestionLevel", CongestionLevel.class)
             );
         }).toList();
     }
@@ -248,7 +274,7 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
 
         // 집계
         sql.append("""
-            group by s.statId, s.statNm, s.addr, s.location, s.useTime, s.parkingFree, s.limitYn, s.kind, s.floorType, so.busiNm
+            group by s.statId, s.statNm, s.addr, s.location, s.useTime, s.parkingFree, s.limitYn, s.kind, s.floorType, so.busiNm, cg.congestionLevel
             """);
 
         // availableOnly = true면 사용 가능한 충전기(stat='2')가 1개 이상인 충전소만 반환

@@ -10,6 +10,9 @@ import ev_charger.be.review.dto.response.StationReviewsSummary;
 import ev_charger.be.station.charger.Charger;
 import ev_charger.be.station.charger.ChargerRepository;
 import ev_charger.be.station.charger.enums.ChgerType;
+import ev_charger.be.station.congestion.Congestion;
+import ev_charger.be.station.congestion.CongestionLevel;
+import ev_charger.be.station.congestion.CongestionRepository;
 import ev_charger.be.station.dto.request.MapBoundsRequest;
 import ev_charger.be.station.dto.request.NearbyStationRequest;
 import ev_charger.be.station.dto.response.NearbyStationPageResponse;
@@ -26,6 +29,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional(readOnly = true)
@@ -38,6 +43,7 @@ public class StationService {
     private final ChargerAlertRepository chargerAlertRepository;
     private final ReviewService reviewService;
     private final FavoriteRepository favoriteRepository;
+    private final CongestionRepository congestionRepository;
 
     /**
      * 가까운 충전소 찾기
@@ -103,6 +109,23 @@ public class StationService {
 
         StationReviewsSummary summary = reviewService.getStationReviewsSummary(statId);
 
+        List<Congestion> congestions = congestionRepository.findByStationOrderByPredictedAtDesc(station);
+
+        Map<Integer, CongestionLevel> levelByTargetTime = congestions.stream()
+                .filter(c -> c.getCongestionLevel() != null)
+                .collect(Collectors.toMap(Congestion::getTargetTime, Congestion::getCongestionLevel,
+                        (latest, older) -> latest)); // predictedAt desc이므로 먼저 나온 게 최신
+
+        Double accuracy = congestions.isEmpty() ? null :
+                congestions.get(0).getCongestionScore();
+
+        StationDetailResponse.CongestionDetail congestionDetail = new StationDetailResponse.CongestionDetail(
+                accuracy,
+                levelByTargetTime.get(1),
+                levelByTargetTime.get(2),
+                levelByTargetTime.get(3)
+        );
+
         return  new StationDetailResponse(
                 station.getStatId(),
                 station.getStatNm(),
@@ -124,7 +147,8 @@ public class StationService {
                 summary.reviewCount(),
                 user != null ? favoriteRepository.existsByUserAndStation(user, station) : null,
                 chargerDetails,
-                reviews
+                reviews,
+                congestionDetail
         );
 
     }
