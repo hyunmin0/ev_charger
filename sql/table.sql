@@ -138,16 +138,16 @@ create table notice(
 );
 create table notification_history(
 	id BIGINT generated always as identity primary key,
-	alert_id BIGINT,
+	statId varchar(8),
+	chgerId varchar(2),
 	notice_id BIGINT,
 	user_id UUID not null,
 	is_read boolean not null,
 	created_at timestamp,
 	foreign key (user_id) references users (user_id) on delete cascade,
-	foreign key (alert_id) references charger_alert(alert_id) on delete cascade,
 	foreign key (notice_id) references notice(notice_id) on delete cascade,
 	check (
-		(alert_id is not null)::int + (notice_id is not null)::int = 1
-	) -- alert, notice 둘 중 하나는 not null이어야 함
+		(chgerId is not null)::int + (notice_id is not null)::int = 1
+	) -- chger, notice 둘 중 하나는 not null이어야 함
 );
 create index idx_station_location on station using gist(location);

@@ -33,7 +33,7 @@ public class FcmService {
             backoff = @Backoff(delay = 1000, multiplier = 2
             )
     )
-    public void send(String token, String title, String body) {
+    public void send(String token, String title, String body, Long notificationHistoryId) {
         try {
             // FireBase Admin SDK로 푸시 발송
             // Message: fcm의 객체
@@ -43,6 +43,7 @@ public class FcmService {
                             .setTitle(title)
                             .setBody(body)
                             .build())
+                    .putData("notificationHistoryId", String.valueOf(notificationHistoryId))
                     .build();
 
             firebaseMessaging.send(message);
@@ -70,7 +71,7 @@ public class FcmService {
     public void recover(IllegalStateException e,
                         String token,
                         // Spring Retry는 파라미터가 일치해야 @Recover를 찾기에 title, body 추가
-                        String title, String body) {
+                        String title, String body, Long notificationHistoryId) {
 
         if (e.getCause() instanceof FirebaseMessagingException fme) {
             log.error("FCM 발송 최종 실패 token={} [{}]: {}", token, fme.getMessagingErrorCode(), fme.getMessage());

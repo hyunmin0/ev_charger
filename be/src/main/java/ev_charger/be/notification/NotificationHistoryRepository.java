@@ -6,6 +6,7 @@ import ev_charger.be.user.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -15,8 +16,8 @@ public interface NotificationHistoryRepository extends JpaRepository<Notificatio
 
     Optional<NotificationHistory> findByIdAndUser(Long id, User user);
 
-    List<NotificationHistory> findByUserAndAlertIn(User user, List<ChargerAlert> alerts);
-
     boolean existsByUserAndNotice(User user, Notice notice);
-    boolean existsByAlert(ChargerAlert alert);
+
+    // 충전기 알림 중에 일주일이 지난 기록 삭제
+    void deleteByChgerIdIsNotNullAndCreatedAtBefore(LocalDateTime createdAt);
 }

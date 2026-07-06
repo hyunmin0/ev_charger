@@ -4,7 +4,7 @@ import ev_charger.be.charger_alert.dto.request.ChargerStatusRequest;
 import ev_charger.be.charger_alert.dto.response.UserChargerAlertResponse;
 import ev_charger.be.common.enums.YN;
 import ev_charger.be.config.FcmService;
-import ev_charger.be.notification.NotificationHistoryRepository;
+import ev_charger.be.notification.NotificationHistory;
 import ev_charger.be.notification.NotificationHistoryService;
 import ev_charger.be.station.Station;
 import ev_charger.be.station.charger.Charger;
@@ -21,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -139,15 +138,15 @@ public class ChargerAlertService {
                 ).stream()).toList();
 
         // 알림 기록 저장(isRead = false)
-        alerts.forEach(notificationHistoryService::save);
+        alerts.forEach(alert -> {
+            NotificationHistory history = notificationHistoryService.save(alert);
 
-        Set<User> users = alerts.stream()
-                .map(ChargerAlert::getUser)
-                .collect(Collectors.toSet());
+            List<FcmToken> fcmTokens = fcmTokenRepository.findByUser(alert.getUser());
 
-        List<FcmToken> fcmTokens = fcmTokenRepository.findByUserIn(users);
+            fcmTokens.forEach(token ->
+                    fcmService.send(token.getToken(), "충전기 사용 가능", "알림 설정한 충전기가 사용 가능합니다.", history.getId()));
 
-        fcmTokens.forEach(token ->
-                fcmService.send(token.getToken(), "충전기 사용 가능", "알림 설정한 충전기가 사용 가능합니다."));
+            chargerAlertRepository.delete(alert);
+        });
     }
 }

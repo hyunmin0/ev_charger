@@ -3,6 +3,7 @@ package ev_charger.be.station.dto.response;
 import ev_charger.be.review.dto.response.StationReviewResponse;
 import ev_charger.be.station.charger.enums.ChgerStat;
 import ev_charger.be.station.charger.enums.ChgerType;
+import ev_charger.be.station.congestion.CongestionLevel;
 
 import java.util.List;
 
@@ -27,7 +28,8 @@ public record StationDetailResponse(
         int reviewCount,
         Boolean isFavorite,
         List<ChgerDetail> chargers,
-        List<StationReviewResponse> reviews
+        List<StationReviewResponse> reviews,
+        CongestionDetail congestions
 ) {
     public record ChgerDetail(
             String chgerId,
@@ -35,5 +37,12 @@ public record StationDetailResponse(
             String output,
             ChgerStat chgerStat,
             boolean isAlert
+    ) {}
+
+    public record CongestionDetail(
+           Double accuracy,
+           CongestionLevel oneHour,
+           CongestionLevel twoHour,
+           CongestionLevel threeHour
     ) {}
 }
