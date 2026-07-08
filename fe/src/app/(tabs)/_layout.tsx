@@ -3,7 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 export default function TabLayout() {
   return (
-    <Tabs screenOptions={{ headerShown: false, tabBarActiveTintColor: "#4CAF50" }}>
+    <Tabs screenOptions={{ headerShown: false, tabBarActiveTintColor: "#5B9CF6", tabBarStyle: {height: 70, paddingBottom: 8},}}>
       <Tabs.Screen
         name="index"
         options={{
@@ -19,7 +19,7 @@ export default function TabLayout() {
   }}
 />
 <Tabs.Screen
-  name="notifications"
+  name="chatbot"
   options={{
     title: "채팅",
     tabBarIcon: ({ color }) => <Ionicons name="chatbubble-outline" size={24} color={color} />,
