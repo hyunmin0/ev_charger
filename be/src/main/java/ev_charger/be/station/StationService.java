@@ -9,6 +9,7 @@ import ev_charger.be.review.dto.response.StationReviewResponse;
 import ev_charger.be.review.dto.response.StationReviewsSummary;
 import ev_charger.be.station.charger.Charger;
 import ev_charger.be.station.charger.ChargerRepository;
+import ev_charger.be.station.charger.enums.ChgerStat;
 import ev_charger.be.station.charger.enums.ChgerType;
 import ev_charger.be.station.congestion.Congestion;
 import ev_charger.be.station.congestion.CongestionLevel;
@@ -109,22 +110,31 @@ public class StationService {
 
         StationReviewsSummary summary = reviewService.getStationReviewsSummary(statId);
 
-        List<Congestion> congestions = congestionRepository.findByStationOrderByPredictedAtDesc(station);
+        boolean noAvailableCharger = chargers.stream().noneMatch(c -> c.getChgerStat() == ChgerStat.WAITING
+        || c.getChgerStat() == ChgerStat.CHARGING
+        || c.getChgerStat() == ChgerStat.RESERVED);
 
-        Map<Integer, CongestionLevel> levelByTargetTime = congestions.stream()
-                .filter(c -> c.getCongestionLevel() != null)
-                .collect(Collectors.toMap(Congestion::getTargetTime, Congestion::getCongestionLevel,
-                        (latest, older) -> latest)); // predictedAt desc이므로 먼저 나온 게 최신
+        StationDetailResponse.CongestionDetail congestionDetail;
+        if (noAvailableCharger) {
+            congestionDetail = new StationDetailResponse.CongestionDetail(null, null, null, null);
+        } else {
+            List<Congestion> congestions = congestionRepository.findByStationOrderByPredictedAtDesc(station);
 
-        Double accuracy = congestions.isEmpty() ? null :
-                congestions.get(0).getCongestionScore();
+            Map<Integer, CongestionLevel> levelByTargetTime = congestions.stream()
+                    .filter(c -> c.getCongestionLevel() != null)
+                    .collect(Collectors.toMap(Congestion::getTargetTime, Congestion::getCongestionLevel,
+                            (latest, older) -> latest)); // predictedAt desc이므로 먼저 나온 게 최신
 
-        StationDetailResponse.CongestionDetail congestionDetail = new StationDetailResponse.CongestionDetail(
-                accuracy,
-                levelByTargetTime.get(1),
-                levelByTargetTime.get(2),
-                levelByTargetTime.get(3)
-        );
+            Double accuracy = congestions.isEmpty() ? null :
+                    congestions.get(0).getCongestionScore();
+
+            congestionDetail = new StationDetailResponse.CongestionDetail(
+                    accuracy,
+                    levelByTargetTime.get(1),
+                    levelByTargetTime.get(2),
+                    levelByTargetTime.get(3)
+            );
+        }
 
         return  new StationDetailResponse(
                 station.getStatId(),

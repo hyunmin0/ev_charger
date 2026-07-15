@@ -55,7 +55,7 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
                 round(avg(r.rating)::numeric, 1) averageRating,
                 count(r.review_id) reviewCount,
                 ST_Distance(s.location, ST_MakePoint(:lng, :lat)::geography) distance, -- 충전소 위치와 현 위치의 거리
-                cg.congestionLevel nextHourCongestionLevel
+                case when count(c.chgerId) filter (where c.stat in ('2', '3', '6')) = 0 then null else cg.congestionLevel end nextHourCongestionLevel -- 충전대기, 충전중, 예약중이 아니면 null
             from station s
                 join charger c on s.statId = c.statId
                 join station_operator so on s.busiId = so.busiId
@@ -126,7 +126,7 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
             round(avg(r.rating)::numeric, 1) averageRating,
             count(r.review_id) reviewCount,
             ST_Distance(s.location, ST_MakePoint(:userLng, :userLat)::geography) distance, -- 충전소 위치와 현 위치의 거리
-            cg.congestionLevel nextHourCongestionLevel
+            case when count(c.chgerId) filter (where c.stat in ('2', '3', '6')) = 0 then null else cg.congestionLevel end nextHourCongestionLevel -- 충전대기, 충전중, 예약중이 아니면 null
             from station s
                 join charger c on s.statId = c.statId
                 join station_operator so on s.busiId = so.busiId
@@ -184,7 +184,7 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
             round(avg(r.rating)::numeric, 1) averageRating,
             count(r.review_id) reviewCount,
             ST_Distance(s.location, ST_MakePoint(:userLng, :userLat)::geography) distance, -- 충전소 위치와 현 위치의 거리
-            cg.congestionLevel nextHourCongestionLevel
+            case when count(c.chgerId) filter (where c.stat in ('2', '3', '6')) = 0 then null else cg.congestionLevel end nextHourCongestionLevel -- 충전대기, 충전중, 예약중이 아니면 null
             from station s
                 join charger c on s.statId = c.statId
                 join station_operator so on s.busiId = so.busiId
