@@ -6,7 +6,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 import { Ionicons } from "@expo/vector-icons";
-
+// 상단에
+import AsyncStorage from "@react-native-async-storage/async-storage";
 const KAKAO_API_KEY = "c8ed16f7d0f7208cec6b025168773f5e";
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
 const SHEET_HEIGHT = SCREEN_HEIGHT * 0.78;
@@ -35,8 +36,16 @@ const mapHTML = `<!DOCTYPE html><html><head>
 </head><body><div id="map"></div>
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_API_KEY}&autoload=false"></script>
 <script>kakao.maps.load(function() {
-  new kakao.maps.Map(document.getElementById('map'), {
+  var map = new kakao.maps.Map(document.getElementById('map'), {
     center: new kakao.maps.LatLng(37.5665, 126.9780), level: 5
+  });
+// 지도 이동할 때마다 좌표 전송
+  kakao.maps.event.addListener(map, 'center_changed', function() {
+    var center = map.getCenter();
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      lat: center.getLat(),
+      lng: center.getLng()
+    }));
   });
 });</script></body></html>`;
 
@@ -143,8 +152,17 @@ export default function HomeScreen() {
 
   return (
     <View style={S.container}>
-      <WebView source={{ html: mapHTML, baseUrl: "http://localhost" }}
-        style={StyleSheet.absoluteFill} originWhitelist={["*"]} javaScriptEnabled domStorageEnabled />
+      <WebView
+  source={{ html: mapHTML, baseUrl: "http://localhost" }}
+  style={StyleSheet.absoluteFill}
+  originWhitelist={["*"]}
+  javaScriptEnabled
+  domStorageEnabled
+  onMessage={(e) => {
+    const { lat, lng } = JSON.parse(e.nativeEvent.data);
+    AsyncStorage.setItem("mapLocation", JSON.stringify({ lat, lng }));
+  }}
+/>
 
       <SafeAreaView edges={["top"]} style={S.topOverlay} pointerEvents="box-none">
         <View style={S.searchRow}>

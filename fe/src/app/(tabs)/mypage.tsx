@@ -1,8 +1,9 @@
+import React, { useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-const isLoggedIn = false;
+
 
 const menuItems = [
   { label: "내 차량 관리", icon: "car-outline" as const, route: "/car-management" },
@@ -12,6 +13,7 @@ const menuItems = [
   { label: "공지사항", icon: null, route: "/" },
 ];
 export default function MypageScreen() {
+   const [isLoggedIn, setIsLoggedIn] = useState(false);
   return (
     <SafeAreaView style={styles.container}edges=
     {["bottom", "left", "right"]}>
@@ -58,14 +60,16 @@ export default function MypageScreen() {
         </View>
 
         {/* 로그아웃 카드 */}
-        <View style={styles.card}>
-          <TouchableOpacity style={styles.menuItem}>
-            <View style={styles.menuLeft}>
-              <Ionicons name="log-out-outline" size={20} color="#e53935" style={styles.menuIcon} />
-              <Text style={styles.logoutText}>로그아웃</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
+{isLoggedIn && (
+  <View style={styles.card}>
+    <TouchableOpacity style={styles.menuItem} onPress={() => setIsLoggedIn(false)}>
+      <View style={styles.menuLeft}>
+        <Ionicons name="log-out-outline" size={20} color="#e53935" style={styles.menuIcon} />
+        <Text style={styles.logoutText}>로그아웃</Text>
+      </View>
+    </TouchableOpacity>
+  </View>
+)}
       </ScrollView>
     </SafeAreaView>
   );

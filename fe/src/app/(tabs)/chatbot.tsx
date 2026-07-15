@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-
+import AsyncStorage from "@react-native-async-storage/async-storage";
 const ACCENT = "#5B9CF6";
 const CARS = ["선택 안함", "현대 아이오닉 5", "기아 EV9"];
 type Msg = { id: string; role: "user" | "bot"; text: string };
@@ -39,23 +39,46 @@ export default function ChatScreen() {
   const [dropVisible, setDropVisible] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([...INITIAL_MSGS]);
   const [input, setInput] = useState("");
-  const send = () => {
-    const text = input.trim();
-    if (!text) return;
-    const userMsg: Msg = { id: Date.now().toString(), role: "user", text };
-    const botMsg: Msg = {
-      id: (Date.now() + 1).toString(),
-      role: "bot",
-      text: "아직 LLM 프롬프트 수정중이라서\n답변을 생각하지 못했어요. 😅",
-    };
-    setMsgs((prev) => [...prev, userMsg, botMsg]);
-    setInput("");
+  const send = async () => {
+  const text = input.trim();
+  if (!text) return;
+
+  const stored = await AsyncStorage.getItem("mapLocation");
+  const location = stored ? JSON.parse(stored) : null;
+
+  // 대화 히스토리 변환 (현재 메시지 제외한 이전 것들)
+  const history = msgs.map((m) => ({
+    role: m.role === "user" ? "user" : "assistant",
+    content: m.text,
+  }));
+
+  const payload = {
+    user_id: "3fa85f64-5717-4562-b3fc-2c963f66afa6", // 나중에 실제 로그인 유저 ID로 교체
+    car_id: null, // 나중에 선택된 차량 ID로 교체
+    message: text,
+    history: history,
+    lat: location?.lat ?? null,
+    lng: location?.lng ?? null,
   };
+
+  console.log("전송:", JSON.stringify(payload, null, 2));
+  // 백엔드 연결 시: const res = await axios.post("/api/chat", payload);
+
+  const userMsg: Msg = { id: Date.now().toString(), role: "user", text };
+  const botMsg: Msg = {
+    id: (Date.now() + 1).toString(),
+    role: "bot",
+    text: "아직 LLM 프롬프트 수정중이라서\n답변을 생각하지 못했어요. 😅",
+  };
+  setMsgs((prev) => [...prev, userMsg, botMsg]);
+  setInput("");
+};
 
   return (
     <SafeAreaView style={s.safe} edges={[]}>
       {/* 헤더 */}
-      <View style={[s.header, {paddingTop: 8}]}>
+      <View style={[s.header, {paddingTop: 14
+      }]}>
         <Ionicons name="car-outline" size={20} color="#444" />
         <TouchableOpacity style={s.carBtn} onPress={() => setDropVisible((v) => !v)}>
           <Text style={s.carText}>{car}</Text>
