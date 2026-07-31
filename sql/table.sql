@@ -19,8 +19,53 @@ create table users (
 );
 create table car (
 	car_id BIGINT primary key generated always as identity,
-	car_name varchar(255) not null unique,
-	battery_capacity Float not null
+	brand varchar(50) not null,
+	model varchar(50) not null,
+	battery_type varchar(20) not null,
+	model_year int not null,
+	drive_type varchar(3) not null check (drive_type in ('FWD', 'RWD', 'AWD')),
+	wheel_size int not null,
+	battery_capacity Float not null,
+	trim varchar(50),
+	combined Float,
+	city Float,
+	highway Float,
+	unique (
+		brand,
+		model,
+		battery_type,
+		model_year,
+		drive_type,
+		wheel_size,
+		trim
+	)
+);
+create table car_charger (
+	car_charger_id BIGINT primary key generated always as identity,
+	brand varchar(50) not null,
+	model varchar(50) not null,
+	model_year int not null,
+	charger_type char(2) not null check (
+		charger_type in ('01', '02', '04', '07', '08', '09', '11')
+	),
+	unique (brand, model, model_year, charger_type)
+);
+create table charge (
+	charge_id BIGINT primary key generated always as identity,
+	brand varchar(50) not null,
+	model varchar(50) not null,
+	battery_type varchar(20) not null,
+	model_year int not null,
+	charger_type varchar(50) not null,
+	charger_output int,
+	minutes int not null,
+	unique (
+		brand,
+		model,
+		battery_type,
+		model_year,
+		charger_type
+	)
 );
 CREATE TABLE user_car(
 	user_car_id BIGINT generated always as identity primary key,
@@ -121,7 +166,7 @@ create table charger_alert(
 	created_at TIMESTAMP not null,
 	unique (user_id, statId, chgerId),
 	FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE,
-	foreign key (chgerId) references charger(statId, chgerId) on delete cascade
+	foreign key (statId, chgerId) references charger(statId, chgerId) on delete cascade
 );
 create table fcm_token(
 	id BIGINT generated always as identity primary key,
@@ -131,7 +176,7 @@ create table fcm_token(
 	foreign key (user_id) references users (user_id) on delete cascade
 );
 create table notice(
-	notice_id BIGINT generated alwyas as identity primary key,
+	notice_id BIGINT generated always as identity primary key,
 	title varchar(255) not null,
 	content varchar(512) not null,
 	created_at timestamp not null
@@ -149,5 +194,14 @@ create table notification_history(
 	check (
 		(chgerId is not null)::int + (notice_id is not null)::int = 1
 	) -- chger, notice 둘 중 하나는 not null이어야 함
+);
+CREATE TABLE congestion (
+	id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+	statId varchar(8) NOT NULL,
+	targetTime int NOT NULL,
+	congestionLevel varchar(2) NOT NULL CHECK (congestionLevel IN ('여유', '보통', '혼잡')),
+	congestionScore double precision,
+	predictedAt TIMESTAMP,
+	FOREIGN KEY (statId) REFERENCES station (statId) ON DELETE CASCADE
 );
 create index idx_station_location on station using gist(location);
