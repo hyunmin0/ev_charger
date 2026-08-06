@@ -1,95 +1,165 @@
-import React, { useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
+import React, { useState, useCallback } from "react";
+import {
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-
-const menuItems = [
+const MENU_ITEMS = [
   { label: "내 차량 관리", icon: "car-outline" as const, route: "/car-management" },
-  { label: "즐겨찾기 충전소", icon: "star-outline" as const, route: "/" },
-  { label: "충전기 알림 관리", icon: "notifications-outline" as const, route: "/" },
+  { label: "즐겨찾기 충전소", icon: "star-outline" as const, route: "/favorites" },
+  { label: "충전기 알림 관리", icon: "notifications-outline" as const, route: "/charger-alerts" },
   { label: "내 리뷰", icon: "chatbubble-outline" as const, route: "/my-reviews" },
-  { label: "공지사항", icon: null, route: "/" },
+  { label: "공지사항", icon: "megaphone-outline" as const, route: "/notices" },
 ];
+
 export default function MypageScreen() {
-   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+  const [userName, setUserName] = useState("");
+  const [userEmail, setUserEmail] = useState("");
+
+  // 화면 포커스될 때마다 로그인 상태 확인
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        const [t, n, e] = await AsyncStorage.multiGet(["jwt_token", "user_name", "user_email"]);
+        setToken(t[1]);
+        setUserName(n[1] ?? "");
+        setUserEmail(e[1] ?? "");
+      })();
+    }, [])
+  );
+
+  const handleLogout = () => {
+    Alert.alert("로그아웃", "로그아웃 하시겠어요?", [
+      { text: "취소", style: "cancel" },
+      {
+        text: "로그아웃",
+        style: "destructive",
+        onPress: async () => {
+          await AsyncStorage.multiRemove(["jwt_token", "user_name", "user_email"]);
+          setToken(null);
+          setUserName("");
+          setUserEmail("");
+        },
+      },
+    ]);
+  };
+
+  const handleMenuPress = (route: string) => {
+    router.push(route as any);
+  };
+
   return (
-    <SafeAreaView style={styles.container}edges=
-    {["bottom", "left", "right"]}>
+    <SafeAreaView style={S.container} edges={["bottom", "left", "right"]}>
       {/* 헤더 */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>마이페이지</Text>
-        <View style={styles.headerIcons}>
-          <TouchableOpacity style={styles.iconBtn}>
+      <View style={S.header}>
+        <Text style={S.headerTitle}>마이페이지</Text>
+        <View style={S.headerIcons}>
+          <TouchableOpacity style={S.iconBtn}>
             <Ionicons name="notifications-outline" size={24} color="#333" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn}>
+          <TouchableOpacity style={S.iconBtn}>
             <Ionicons name="settings-outline" size={24} color="#333" />
           </TouchableOpacity>
         </View>
       </View>
 
-      <ScrollView style={styles.scroll}>
+      <ScrollView style={S.scroll}>
         {/* 프로필 카드 */}
-        <TouchableOpacity style={styles.profileCard}>
-          <View style={styles.profileImage}>
-            <Ionicons name="person-outline" size={36} color="#999" />
+        {token ? (
+          // 로그인 상태
+          <View style={S.profileCard}>
+            <View style={S.profileImage}>
+              <Ionicons name="person" size={34} color="#5B9CF6" />
+            </View>
+            <View style={S.profileInfo}>
+              <Text style={S.profileName}>{userName || "사용자"}</Text>
+              <Text style={S.profileEmail}>{userEmail || ""}</Text>
+            </View>
+            <TouchableOpacity onPress={() => router.push("/login" as any)}>
+              <Ionicons name="create-outline" size={20} color="#aaa" />
+            </TouchableOpacity>
           </View>
-          <Text style={styles.loginText}>로그인하기</Text>
-        </TouchableOpacity>
+        ) : (
+          // 비로그인 상태
+          <TouchableOpacity style={S.profileCard} onPress={() => router.push("/login" as any)}>
+            <View style={S.profileImage}>
+              <Ionicons name="person-outline" size={34} color="#999" />
+            </View>
+            <View style={S.profileInfo}>
+              <Text style={S.loginText}>로그인하기</Text>
+              <Text style={S.loginSub}>탭하여 로그인하세요</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#ccc" />
+          </TouchableOpacity>
+        )}
 
         {/* 메뉴 카드 */}
-        <View style={styles.card}>
-          {menuItems.map((item, index) => (
+        <View style={S.card}>
+          {MENU_ITEMS.map((item, index) => (
             <TouchableOpacity
-  key={item.label}
-  style={[styles.menuItem, index < menuItems.length - 1 && styles.menuBorder]}
-  onPress={() => router.push(item.route as any)}
->
-              <View style={styles.menuLeft}>
-                {item.icon
-                  ? <Ionicons name={item.icon} size={20} color="#555" style={styles.menuIcon} />
-                  : <View style={{ width: null }} />
-                }
-                <Text style={styles.menuLabel}>{item.label}</Text>
+              key={item.label}
+              style={[S.menuItem, index < MENU_ITEMS.length - 1 && S.menuBorder]}
+              onPress={() => handleMenuPress(item.route)}
+            >
+              <View style={S.menuLeft}>
+                <Ionicons name={item.icon} size={20} color="#555" style={S.menuIcon} />
+                <Text style={S.menuLabel}>{item.label}</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color="#ccc" />
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* 로그아웃 카드 */}
-{isLoggedIn && (
-  <View style={styles.card}>
-    <TouchableOpacity style={styles.menuItem} onPress={() => setIsLoggedIn(false)}>
-      <View style={styles.menuLeft}>
-        <Ionicons name="log-out-outline" size={20} color="#e53935" style={styles.menuIcon} />
-        <Text style={styles.logoutText}>로그아웃</Text>
-      </View>
-    </TouchableOpacity>
-  </View>
-)}
+        {/* 로그아웃 (로그인 시만 표시) */}
+        {token && (
+          <View style={S.card}>
+            <TouchableOpacity style={S.menuItem} onPress={handleLogout}>
+              <View style={S.menuLeft}>
+                <Ionicons name="log-out-outline" size={20} color="#e53935" style={S.menuIcon} />
+                <Text style={S.logoutText}>로그아웃</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const S = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f5f5f5" },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, backgroundColor: "#fff" },
+  header: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    paddingHorizontal: 16, paddingVertical: 12, backgroundColor: "#fff",
+  },
   headerTitle: { fontSize: 18, fontWeight: "bold" },
   headerIcons: { flexDirection: "row" },
   iconBtn: { marginLeft: 16 },
   scroll: { padding: 12 },
-  profileCard: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderRadius: 12, marginBottom: 12, paddingHorizontal: 16, paddingVertical: 16 },
-  profileImage: { width: 52, height: 52, borderRadius: 26, backgroundColor: "#f0f0f0", alignItems: "center", justifyContent: "center" },
-  loginText: { fontSize: 16, fontWeight: "500", marginLeft: 14 },
+
+  profileCard: {
+    flexDirection: "row", alignItems: "center", backgroundColor: "#fff",
+    borderRadius: 12, marginBottom: 12, paddingHorizontal: 16, paddingVertical: 16,
+  },
+  profileImage: {
+    width: 52, height: 52, borderRadius: 26,
+    backgroundColor: "#EBF3FF", alignItems: "center", justifyContent: "center",
+  },
+  profileInfo: { flex: 1, marginLeft: 14 },
+  profileName: { fontSize: 16, fontWeight: "700", color: "#111" },
+  profileEmail: { fontSize: 13, color: "#888", marginTop: 2 },
+  loginText: { fontSize: 16, fontWeight: "600", color: "#111" },
+  loginSub: { fontSize: 12, color: "#aaa", marginTop: 2 },
+
   card: { backgroundColor: "#fff", borderRadius: 12, marginBottom: 12, paddingHorizontal: 16, overflow: "hidden" },
   menuItem: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 16 },
   menuBorder: { borderBottomWidth: 1, borderBottomColor: "#f0f0f0" },
   menuLeft: { flexDirection: "row", alignItems: "center" },
   menuIcon: { marginRight: 12 },
-  menuLabel: { fontSize: 15 },
+  menuLabel: { fontSize: 15, color: "#222" },
   logoutText: { fontSize: 15, color: "#e53935" },
 });

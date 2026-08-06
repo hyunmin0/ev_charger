@@ -30,7 +30,6 @@ function Slider({ min, max, step, value, onChange }: {
   const widthRef = useRef(0);
   const viewLeft = useRef(0);
   const [layoutWidth, setLayoutWidth] = useState(0);
-  const [thumbPct, setThumbPct] = useState((value - min) / (max - min));
 
   const move = (pageX: number) => {
     if (widthRef.current === 0) return;
@@ -38,9 +37,7 @@ function Slider({ min, max, step, value, onChange }: {
     const pct = Math.max(0, Math.min(1, x / widthRef.current));
     const raw = min + pct * (max - min);
     const stepped = Math.round(raw / step) * step;
-    const clamped = Math.max(min, Math.min(max, stepped));
-    setThumbPct((clamped - min) / (max - min));
-    onChange(clamped);
+    onChange(Math.max(min, Math.min(max, stepped)));
   };
 
   const panResponder = useRef(
@@ -51,6 +48,8 @@ function Slider({ min, max, step, value, onChange }: {
       onPanResponderMove: (e) => move(e.nativeEvent.pageX),
     })
   ).current;
+
+ const thumbPct = (value - min) / (max - min);
 
   return (
     <View
@@ -138,10 +137,10 @@ export default function CalculatorScreen() {
         <View style={s.card}>
           <View style={s.row}>
             <Text style={s.cardLabel}>현재 배터리 잔량 (SOC)</Text>
-            <Text style={s.rangeHint}>0% ~ 100%</Text>
+            <Text style={s.rangeHint}>10% ~ 100%</Text>
           </View>
           <Text style={s.bigVal}>{soc}%</Text>
-          <Slider min={0} max={100} step={1} value={soc} onChange={(v) => { setSoc(v); setResult(null); }} />
+          <Slider min={10} max={100} step={1} value={soc} onChange={(v) => { setSoc(v); setResult(null); }} />
         </View>
 
         <View style={s.card}>
