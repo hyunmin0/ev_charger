@@ -9,14 +9,18 @@ from tools import ACTIVE_TOOLS, TOOL_FUNCTIONS
 
 client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
 
+# geocode_address -> get_nearby_stations처럼 tool끼리 순차 의존이 있을 수 있어서
+# LLM 호출을 정확히 2번이 아니라 상한이 있는 루프로 돈다 (Agent는 아님 - 상한 있음)
+MAX_TOOL_ROUNDS = 3
+
 
 # schemas.py - ChatRequest, ChatResponse
 async def chat(request: ChatRequest) -> ChatResponse:
     # -------------- ① context.py - 사용자 차량 정보 미리 조회 (매 요청마다)
-    my_car = await get_my_car(request.user_id)
+    my_car = await get_my_car(request.user_id, request.car_id)
 
-    # -------------- ② prompts.py - system prompt 생성
-    system_prompt = build_system_prompt(my_car)
+    # -------------- ② prompts.py - system prompt 생성 (현재 위치도 함께 주입)
+    system_prompt = build_system_prompt(my_car, request.lat, request.lng)
 
     # -------------- ③ OpenAI에 넘길 messages 조립
     #    system → 이전 대화(history) → 현재 질문 순서
@@ -26,51 +30,50 @@ async def chat(request: ChatRequest) -> ChatResponse:
         {"role": "user", "content": request.message},
     ]
 
-    # -------------- ④ LLM 첫 번째 호출 (tool 사용 여부 판단) - tools/__init__.py
-    response = await client.chat.completions.create(
-        model="gpt-4.1-mini",
-        messages=messages,
-        tools=ACTIVE_TOOLS,
-    )
-
-    assistant_message = response.choices[0].message
-
-    # -------------- ⑤ tool_calls가 없으면 바로 응답 반환
-    if not assistant_message.tool_calls:
-        return ChatResponse(reply=assistant_message.content)
-
-
-    # -------------- ⑥ tool_calls가 있으면 → tool 실행 → LLM 두 번째 호출
-    # LLM이 tool을 부르기로 한 메시지를 messages에 추가
-    messages.append(assistant_message)
-
     stations: list[Station] = []
 
-    for tool_call in assistant_message.tool_calls:
-        name = tool_call.function.name
-        args = json.loads(tool_call.function.arguments)
+    # -------------- ④ tool_calls가 있는 동안 반복 (최대 MAX_TOOL_ROUNDS번)
+    for _ in range(MAX_TOOL_ROUNDS):
+        response = await client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=messages,
+            tools=ACTIVE_TOOLS, # tool 스키마
+        )
 
-        result = await TOOL_FUNCTIONS[name](**args)
+        assistant_message = response.choices[0].message
 
-        # get_nearby_stations 결과에서 stations 추출
-        if name == "get_nearby_stations":
-            result_data = json.loads(result)
-            stations = [Station(**s) for s in result_data.get("stations", [])]
+        # tool_calls가 없으면 바로 응답 반환
+        if not assistant_message.tool_calls:
+            return ChatResponse(reply=assistant_message.content, stations=stations)
 
-        # tool 실행 결과를 messages에 추가
-        messages.append({
-            "role": "tool",
-            "tool_call_id": tool_call.id,
-            "content": result,
-        })
+        # LLM이 tool을 부르기로 한 메시지를 messages에 추가
+        messages.append(assistant_message)
 
-    # -------------- ⑦ tool 결과를 포함해서 LLM 두 번째 호출 → 최종 답변 생성
-    tool_response = await client.chat.completions.create(
+        for tool_call in assistant_message.tool_calls:
+            name = tool_call.function.name
+            args = json.loads(tool_call.function.arguments)
+
+            result = await TOOL_FUNCTIONS[name](**args) # tool 함수 호출
+
+            # get_nearby_stations 결과에서 stations 추출 (마지막 호출 결과가 최종값)
+            if name == "get_nearby_stations":
+                result_data = json.loads(result)
+                stations = [Station(**s) for s in result_data.get("stations", [])]
+
+            # tool 실행 결과를 messages에 추가
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "content": result,
+            })
+
+    # -------------- ⑤ 루프 상한까지 돌았으면 tool 없이 마지막 호출로 강제 마무리
+    final_response = await client.chat.completions.create(
         model="gpt-4.1-mini",
         messages=messages,
     )
 
     return ChatResponse(
-        reply=tool_response.choices[0].message.content,
+        reply=final_response.choices[0].message.content,
         stations=stations,
     )

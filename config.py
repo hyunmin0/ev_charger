@@ -13,3 +13,4 @@ def _require(name: str) -> str:
 OPENAI_API_KEY = _require("OPENAI_API_KEY")
 DATABASE_URL = _require("DATABASE_URL")
 INTERNAL_API_KEY = _require("INTERNAL_API_KEY") # 백엔드 소통(키)
+KAKAO_API_KEY = _require("KAKAO_API_KEY") # 카카오 로컬 API (geocoding)

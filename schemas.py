@@ -10,10 +10,15 @@ class ChatMessage(BaseModel):
 # 앱 -> AI
 class ChatRequest(BaseModel):
     user_id: UUID
+    # 차량 미등록/미선택이면 None (그때는 my_car 없이 진행)
+    car_id: int | None = None
     message: str
     # history는 클라이언트(앱)이 저장 (일단)
     # 앱이 들고 다니다가 매 요청에 포함해서 보냄
     history: list[ChatMessage]
+    # 사용자의 현재 GPS 좌표 (앱이 매 요청마다 실어서 보냄)
+    lat: float
+    lng: float
 
 class Station(BaseModel):
     statId: str

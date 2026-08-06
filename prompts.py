@@ -1,7 +1,7 @@
 # 프롬프트 모음
 
 # 첫 시스템 프롬프트
-def build_system_prompt(my_car: dict | None) -> str:
+def build_system_prompt(my_car: dict | None, lat: float, lng: float) -> str:
     if my_car:
         car_info = (
             f"- 차량 모델: {my_car['car_name']}\n"
@@ -15,6 +15,14 @@ def build_system_prompt(my_car: dict | None) -> str:
 
 ## 사용자 차량 정보
 {car_info}
+
+## 사용자 현재 위치
+- 위도: {lat}, 경도: {lng}
+
+## 위치 처리 원칙
+- 사용자가 메시지에서 특정 지역/장소를 언급하지 않으면, 위 현재 위치 좌표를 그대로 get_nearby_stations의 lat/lng로 사용하세요.
+- 사용자가 다른 지역/장소를 언급하면(예: "전남대 근처", "강남역 주변"), 절대로 좌표를 직접 추측하지 말고 먼저 geocode_address를 호출해 좌표를 구한 뒤 그 결과로 get_nearby_stations를 호출하세요.
+- geocode_address 결과가 found: false이면, 해당 장소를 찾지 못했다고 안내하고 현재 위치 기준으로 안내할지 물어보세요.
 
 ## 할 수 있는 것
 - 위치, 반경, 충전기 타입, 이용 가능 여부, 무료주차 여부를 기준으로 근처 충전소를 추천합니다.
