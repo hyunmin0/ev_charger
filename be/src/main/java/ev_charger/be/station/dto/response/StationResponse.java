@@ -18,8 +18,8 @@ public record StationResponse(
         Integer totalCount,
         Integer availableCount, // stat = 2인 개수
         boolean hasCharging, // stat = 3이 1개 이상
-        boolean allUnknown, // 전체가 stat in (0, 9)
-        boolean allUnavailable, // 전체가 stat in (1, 4, 5, 6)
+        boolean allUnknown, // 전체가 stat in (0, 1, 9)
+        boolean allUnavailable, // 전체가 stat in (4, 5, 6)
         Double averageRating, // 리뷰 없을 땐 null
         int reviewCount,
         double distance, // m
