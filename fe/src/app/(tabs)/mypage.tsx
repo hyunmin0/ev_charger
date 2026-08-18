@@ -53,14 +53,14 @@ export default function MypageScreen() {
   };
 
   return (
-    <SafeAreaView style={S.container} edges={["bottom", "left", "right"]}>
+    <SafeAreaView style={S.container} edges={["top","bottom"]}>
       {/* 헤더 */}
       <View style={S.header}>
         <Text style={S.headerTitle}>마이페이지</Text>
         <View style={S.headerIcons}>
-          <TouchableOpacity style={S.iconBtn}>
-            <Ionicons name="notifications-outline" size={24} color="#333" />
-          </TouchableOpacity>
+          <TouchableOpacity style={S.iconBtn} onPress={() => router.push("/charger-alert-history" as any)}>
+  <Ionicons name="notifications-outline" size={24} color="#333" />
+</TouchableOpacity>
           <TouchableOpacity style={S.iconBtn}>
             <Ionicons name="settings-outline" size={24} color="#333" />
           </TouchableOpacity>

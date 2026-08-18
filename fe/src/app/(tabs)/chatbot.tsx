@@ -75,7 +75,7 @@ export default function ChatScreen() {
 };
 
   return (
-    <SafeAreaView style={s.safe} edges={[]}>
+    <SafeAreaView style={s.safe} edges={["top"]}>
       {/* 헤더 */}
       <View style={[s.header, {paddingTop: 14
       }]}>

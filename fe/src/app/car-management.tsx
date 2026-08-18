@@ -73,7 +73,7 @@ export default function CarManagementScreen() {
   };
 
   return (
-    <SafeAreaView style={S.container} edges={[]}>
+    <SafeAreaView style={S.container} edges={["top"]}>
       {/* 헤더 */}
       <View style={S.header}>
         <TouchableOpacity onPress={() => router.back()} style={S.headerBtn}>

@@ -109,7 +109,7 @@ export default function CalculatorScreen() {
   };
 
   return (
-    <SafeAreaView style={s.safe} edges={[]}>
+    <SafeAreaView style={s.safe} edges={["top"]}>
       <View style={s.header}>
         <Ionicons name="car-outline" size={20} color="#444" />
         <TouchableOpacity style={s.carBtn} onPress={() => { setDropCar(v => !v); setDropCharger(false); }}>

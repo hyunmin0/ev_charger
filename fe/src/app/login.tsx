@@ -66,21 +66,14 @@ export default function LoginScreen() {
 
       {/* 소셜 로그인 버튼 */}
       <View style={S.btnSection}>
-        <TouchableOpacity style={[S.oauthBtn, S.kakaoBtn]} onPress={() => handleOAuth("kakao")}>
-          <Text style={S.kakaoIcon}>💬</Text>
-          <Text style={[S.oauthTxt, S.kakaoTxt]}>카카오로 로그인</Text>
-        </TouchableOpacity>
+  <TouchableOpacity style={[S.oauthBtn, S.kakaoBtn]} onPress={() => handleOAuth("kakao")}>
+    <Text style={[S.oauthTxt, S.kakaoTxt]}>카카오로 로그인</Text>
+  </TouchableOpacity>
 
-        <TouchableOpacity style={[S.oauthBtn, S.naverBtn]} onPress={() => handleOAuth("naver")}>
-          <View style={S.naverIconWrap}><Text style={S.naverIconTxt}>N</Text></View>
-          <Text style={[S.oauthTxt, S.naverTxt]}>네이버로 로그인</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={[S.oauthBtn, S.googleBtn]} onPress={() => handleOAuth("google")}>
-          <View style={S.googleIconWrap}><Text style={S.googleIconTxt}>G</Text></View>
-          <Text style={[S.oauthTxt, S.googleTxt]}>구글로 로그인</Text>
-        </TouchableOpacity>
-      </View>
+  <TouchableOpacity style={[S.oauthBtn, S.googleBtn]} onPress={() => handleOAuth("google")}>
+    <Text style={[S.oauthTxt, S.googleTxt]}>구글로 로그인</Text>
+  </TouchableOpacity>
+</View>
 
       <Text style={S.notice}>
         로그인 시 서비스 이용약관 및{"\n"}개인정보 처리방침에 동의하게 됩니다.
