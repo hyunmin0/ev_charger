@@ -23,7 +23,7 @@ create table car (
 	model varchar(50) not null,
 	battery_type varchar(20) not null,
 	model_year int not null,
-	drive_type varchar(3) not null check (drive_type in ('FWD', 'RWD', 'AWD')),
+	drive_type varchar(3) not null check (drive_type in ('2WD', '4WD')),
 	wheel_size int not null,
 	battery_capacity Float not null,
 	trim varchar(50),
@@ -58,14 +58,15 @@ create table charge (
 	model_year int not null,
 	charger_type varchar(50) not null,
 	charger_output int,
-	minutes int not null,
-	unique (
-		brand,
-		model,
-		battery_type,
-		model_year,
-		charger_type
-	)
+	minutes int not null
+);
+create unique index charge_unique_key on charge (
+	brand,
+	model,
+	battery_type,
+	model_year,
+	charger_type,
+	coalesce(charger_output, -1) -- null을 -1인셈 치고 중복 체크
 );
 CREATE TABLE user_car(
 	user_car_id BIGINT generated always as identity primary key,

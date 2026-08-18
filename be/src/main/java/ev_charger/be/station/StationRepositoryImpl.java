@@ -50,8 +50,8 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
                 count(c.chgerId) totalCount,
                 count(c.chgerId) filter (where c.stat = '2') availableCount,
                 count(c.chgerId) filter (where c.stat = '3') > 0 hasCharging,
-                count(c.chgerId) filter (where c.stat in ('0', '9')) = count(c.chgerId) allUnknown,
-                count(c.chgerId) filter (where c.stat in ('1', '4', '5', '6')) = count(c.chgerId) allUnavailable,
+                count(c.chgerId) filter (where c.stat in ('0', '1', '9')) = count(c.chgerId) allUnknown,
+                count(c.chgerId) filter (where c.stat in ('4', '5', '6')) = count(c.chgerId) allUnavailable,
                 round(avg(r.rating)::numeric, 1) averageRating,
                 count(r.review_id) reviewCount,
                 ST_Distance(s.location, ST_MakePoint(:lng, :lat)::geography) distance, -- 충전소 위치와 현 위치의 거리
@@ -121,8 +121,8 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
             count(c.chgerId) totalCount,
             count(c.chgerId) filter (where c.stat = '2') availableCount,
             count(c.chgerId) filter (where c.stat = '3') > 0 hasCharging,
-            count(c.chgerId) filter (where c.stat in ('0', '9')) = count(c.chgerId) allUnknown,
-            count(c.chgerId) filter (where c.stat in ('1', '4', '5', '6')) = count(c.chgerId) allUnavailable,
+            count(c.chgerId) filter (where c.stat in ('0', '1', '9')) = count(c.chgerId) allUnknown,
+            count(c.chgerId) filter (where c.stat in ('4', '5', '6')) = count(c.chgerId) allUnavailable,
             round(avg(r.rating)::numeric, 1) averageRating,
             count(r.review_id) reviewCount,
             ST_Distance(s.location, ST_MakePoint(:userLng, :userLat)::geography) distance, -- 충전소 위치와 현 위치의 거리
@@ -179,8 +179,8 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
             count(c.chgerId) totalCount,
             count(c.chgerId) filter (where c.stat = '2') availableCount,
             count(c.chgerId) filter (where c.stat = '3') > 0 hasCharging,
-            count(c.chgerId) filter (where c.stat in ('0', '9')) = count(c.chgerId) allUnknown,
-            count(c.chgerId) filter (where c.stat in ('1', '4', '5', '6')) = count(c.chgerId) allUnavailable,
+            count(c.chgerId) filter (where c.stat in ('0', '1', '9')) = count(c.chgerId) allUnknown,
+            count(c.chgerId) filter (where c.stat in ('4', '5', '6')) = count(c.chgerId) allUnavailable,
             round(avg(r.rating)::numeric, 1) averageRating,
             count(r.review_id) reviewCount,
             ST_Distance(s.location, ST_MakePoint(:userLng, :userLat)::geography) distance, -- 충전소 위치와 현 위치의 거리
