@@ -12,19 +12,19 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface UserCarRepository extends JpaRepository<UserCar, Long> {
+public interface UserCarRepository extends JpaRepository<UserCar, UUID> {
     // findByCarid() == findById()이며 findById()는 jpa가 제공함
         // Id == PK
 
     List<UserCar> findByUser(User user);
 
-    Optional<UserCar> findByUserAndUserCarId(User user, long userCarId);
+    Optional<UserCar> findByUserAndUserCarId(User user, UUID userCarId);
 
     Boolean existsByUserAndCar(User User, Car car);
 
     int countByUser(User user);
 
-    @Query ("select uc.car from UserCar uc where uc.user= :user")
+    @Query("select uc from UserCar uc where uc.user= :user")
     // :user와 @Param("user")가 서로 매핑
     List<UserCar> findCarByUser(@Param("user") User user);
 }

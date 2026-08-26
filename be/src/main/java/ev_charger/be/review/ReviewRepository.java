@@ -18,6 +18,6 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
 
     int countByUser(User user);
 
-    @Query("select r.rating from review r where r.station = :station")
+    @Query("select r.rating from Review r where r.station = :station")
     List<Integer> findRatingsByStation(Station station);
 }

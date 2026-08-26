@@ -20,7 +20,7 @@ import java.util.UUID;
 public class UserCar {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    private long userCarId;
+    private UUID userCarId;
 
     @JoinColumn(name="user_id", nullable = false)
     @ManyToOne(fetch=FetchType.LAZY)
