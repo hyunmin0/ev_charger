@@ -12,13 +12,13 @@ import { useRouter } from "expo-router";
 const BACKEND_URL = "http://10.0.2.2:8080";
 
 const KAKAO_REST_API_KEY = "da7c455f848e4647403a7998bdb5ff6d";
-const KAKAO_REDIRECT_URI = "http://localhost";
+const KAKAO_REDIRECT_URI = "http://localhost/";
 const KAKAO_AUTH_URL =
   `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_REST_API_KEY}` +
   `&redirect_uri=${encodeURIComponent(KAKAO_REDIRECT_URI)}&response_type=code`;
 
 const GOOGLE_CLIENT_ID = "386508397583-v6tuoduhkk5o7abv9shbgeg4nakoc8ll.apps.googleusercontent.com";
-const GOOGLE_REDIRECT_URI = "http://localhost";
+const GOOGLE_REDIRECT_URI = "http://localhost/";
 const GOOGLE_AUTH_URL =
   `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}` +
   `&redirect_uri=${encodeURIComponent(GOOGLE_REDIRECT_URI)}&response_type=code&scope=email%20profile`;
