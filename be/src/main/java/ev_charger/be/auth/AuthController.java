@@ -51,4 +51,9 @@ public class AuthController {
             @RequestParam String refreshToken) {
         return ResponseEntity.ok(authService.reissue(refreshToken));
     }
+    @PostMapping("/login/kakao/code")
+    public ResponseEntity<SocialLoginResponse> kakaoCodeLogin(
+            @RequestParam String code) {
+        return ResponseEntity.ok(authService.kakaoCodeLogin(code));
+    }
 }

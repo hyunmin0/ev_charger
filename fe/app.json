@@ -13,7 +13,11 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.soyeonnnnn.fe",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -30,6 +34,12 @@
       "expo-secure-store",
       "expo-font"
     ],
-    "scheme": "ev-charger"
+    "scheme": "ev-charger",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "ed4ea0df-8ecb-4d43-b495-5a4646b0317e"
+      }
+    }
   }
 }
