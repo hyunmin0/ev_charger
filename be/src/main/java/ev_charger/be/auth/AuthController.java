@@ -56,4 +56,10 @@ public class AuthController {
             @RequestParam String code) {
         return ResponseEntity.ok(authService.kakaoCodeLogin(code));
     }
+
+    @PostMapping("/google/token")
+    public ResponseEntity<SocialLoginResponse> googleCodeLogin(
+            @RequestParam String code) {
+        return ResponseEntity.ok(authService.googleCodeLogin(code));
+    }
 }

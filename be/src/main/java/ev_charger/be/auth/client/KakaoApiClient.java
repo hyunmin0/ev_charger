@@ -37,7 +37,7 @@ public class KakaoApiClient implements OAuthApiClient{
         String id = String.valueOf(body.get("id"));
 
         Map<String,Object> kakaoAccount = (Map<String, Object>) body.get("kakao_account");
-        String email = (String) kakaoAccount.get("email");
+        String email = kakaoAccount == null ? null : (String) kakaoAccount.get("email");
 
         return new UserInfo(id, email);
     }

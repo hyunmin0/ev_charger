@@ -1,15 +1,18 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, Modal, ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView, WebViewNavigation } from "react-native-webview";
+import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
-const BACKEND_URL = "http://10.0.2.2:8080";
+// USB로 연결해서 adb reverse tcp:8080 tcp:8080으로 포트를 넘겨받는 구성이라 localhost로 접근함
+// (와이파이로 테스트할 땐 대신 컴퓨터의 LAN IP를 넣어야 함)
+const BACKEND_URL = "http://localhost:8080";
 
 const KAKAO_REST_API_KEY = "da7c455f848e4647403a7998bdb5ff6d";
 const KAKAO_REDIRECT_URI = "http://localhost/";
@@ -17,11 +20,9 @@ const KAKAO_AUTH_URL =
   `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_REST_API_KEY}` +
   `&redirect_uri=${encodeURIComponent(KAKAO_REDIRECT_URI)}&response_type=code`;
 
-const GOOGLE_CLIENT_ID = "386508397583-v6tuoduhkk5o7abv9shbgeg4nakoc8ll.apps.googleusercontent.com";
-const GOOGLE_REDIRECT_URI = "http://localhost/";
-const GOOGLE_AUTH_URL =
-  `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}` +
-  `&redirect_uri=${encodeURIComponent(GOOGLE_REDIRECT_URI)}&response_type=code&scope=email%20profile`;
+// 네이티브 구글 로그인 SDK가 서버에서 검증 가능한 토큰을 받으려면
+// "웹 애플리케이션" 타입 클라이언트 ID가 필요함 (Android 클라이언트 ID와는 다름)
+const GOOGLE_WEB_CLIENT_ID = "386508397583-v6tuoduhkk5o7abv9shbgeg4nakoc8ll.apps.googleusercontent.com";
 
 type Provider = "kakao" | "google";
 
@@ -30,6 +31,10 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();   // ← 핵심 fix
   const [oauthUrl, setOauthUrl] = useState<string | null>(null);
   const [webLoading, setWebLoading] = useState(false);
+
+  useEffect(() => {
+    GoogleSignin.configure({ webClientId: GOOGLE_WEB_CLIENT_ID });
+  }, []);
 
   const handleNavChange = async (nav: WebViewNavigation) => {
     const url = nav.url;
@@ -41,37 +46,29 @@ export default function LoginScreen() {
     setOauthUrl(null);
 
     try {
-      // 어느 provider인지 판단 (URL로 판별)
-      const isKakao = oauthUrl?.includes("kauth.kakao.com");
+      // 카카오: code만 보내면 백엔드가 토큰 교환까지 처리 (client_secret 이슈 회피)
+      const loginRes = await fetch(
+        `${BACKEND_URL}/auth/login/kakao/code?code=${encodeURIComponent(code)}`,
+        { method: "POST" }
+      );
+      await handleLoginResponse(loginRes);
+    } catch (e) {
+      console.error("OAuth error", e);
+    }
+  };
 
-      if (isKakao) {
-        // 1) 카카오: code → access token (직접 교환)
-        const tokenRes = await fetch("https://kauth.kakao.com/oauth/token", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({
-            grant_type: "authorization_code",
-            client_id: KAKAO_REST_API_KEY,
-            redirect_uri: KAKAO_REDIRECT_URI,
-            code,
-          }).toString(),
-        });
-        const { access_token } = await tokenRes.json();
+  // 구글은 WebView/브라우저 리다이렉트 로그인을 막아놔서 네이티브 SDK를 써야 함
+  const handleGoogleLogin = async () => {
+    try {
+      await GoogleSignin.hasPlayServices();
+      await GoogleSignin.signIn();
+      const { accessToken } = await GoogleSignin.getTokens();
 
-        // 2) 백엔드에 access token 전달
-        const loginRes = await fetch(
-          `${BACKEND_URL}/auth/login?accessToken=${access_token}&provider=KAKAO`,
-          { method: "POST" }
-        );
-        await handleLoginResponse(loginRes);
-      } else {
-        // Google: code → 백엔드에서 client_secret으로 교환
-        const loginRes = await fetch(
-          `${BACKEND_URL}/auth/google/token?code=${encodeURIComponent(code)}`,
-          { method: "POST" }
-        );
-        await handleLoginResponse(loginRes);
-      }
+      const loginRes = await fetch(
+        `${BACKEND_URL}/auth/login?accessToken=${accessToken}&provider=GOOGLE`,
+        { method: "POST" }
+      );
+      await handleLoginResponse(loginRes);
     } catch (e) {
       console.error("OAuth error", e);
     }
@@ -108,7 +105,7 @@ export default function LoginScreen() {
         <TouchableOpacity style={[S.oauthBtn, S.kakaoBtn]} onPress={() => setOauthUrl(KAKAO_AUTH_URL)}>
           <Text style={[S.oauthTxt, S.kakaoTxt]}>카카오로 로그인</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[S.oauthBtn, S.googleBtn]} onPress={() => setOauthUrl(GOOGLE_AUTH_URL)}>
+        <TouchableOpacity style={[S.oauthBtn, S.googleBtn]} onPress={handleGoogleLogin}>
           <Text style={[S.oauthTxt, S.googleTxt]}>구글로 로그인</Text>
         </TouchableOpacity>
       </View>

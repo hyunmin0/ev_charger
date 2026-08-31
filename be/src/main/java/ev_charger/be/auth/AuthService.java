@@ -53,6 +53,15 @@ public class AuthService {
     @Value("${kakao.redirect-uri}")
     private String kakaoRedirectUri;
 
+    @Value("${google.token-url}")
+    private String googleTokenUrl;
+
+    @Value("${google.client-id}")
+    private String googleClientId;
+
+    @Value("${google.redirect-uri}")
+    private String googleRedirectUri;
+
 
     /**
      * 카카오 인가 코드로 로그인 (프론트에서 code만 보내면 백엔드가 토큰 교환)
@@ -78,6 +87,31 @@ public class AuthService {
 
         // 2) 기존 로그인 로직 재사용
         return socialLogin(accessToken, Provider.KAKAO);
+    }
+
+    /**
+     * 구글 인가 코드로 로그인 (프론트에서 code만 보내면 백엔드가 토큰 교환)
+     * Android 타입 OAuth 클라이언트라 client_secret 없이 교환
+     * @param code 구글 인가 코드
+     */
+    @Transactional
+    public SocialLoginResponse googleCodeLogin(String code) {
+        RestTemplate restTemplate = new RestTemplate();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
+        body.add("grant_type", "authorization_code");
+        body.add("client_id", googleClientId);
+        body.add("redirect_uri", googleRedirectUri);
+        body.add("code", code);
+
+        Map<String, Object> tokenResponse = restTemplate.postForObject(
+                googleTokenUrl, new HttpEntity<>(body, headers), Map.class);
+
+        String accessToken = (String) tokenResponse.get("access_token");
+
+        return socialLogin(accessToken, Provider.GOOGLE);
     }
 
     /**
