@@ -1,11 +1,14 @@
 import React, { useState, useCallback } from "react";
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
+// USB로 연결해서 adb reverse tcp:8080 tcp:8080으로 포트를 넘겨받는 구성이라 localhost로 접근함
+const BACKEND_URL = "http://localhost:8080";
 
 const MENU_ITEMS = [
   { label: "내 차량 관리", icon: "car-outline" as const, route: "/car-management" },
@@ -19,15 +22,32 @@ export default function MypageScreen() {
   const [token, setToken] = useState<string | null>(null);
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
+  const [profileImageUrl, setProfileImageUrl] = useState("");
 
-  // 화면 포커스될 때마다 로그인 상태 확인
+  // 화면 포커스될 때마다 로그인 상태 확인 후, 로그인 상태면 최신 프로필 조회
   useFocusEffect(
     useCallback(() => {
       (async () => {
-        const [t, n, e] = await AsyncStorage.multiGet(["jwt_token", "user_name", "user_email"]);
-        setToken(t[1]);
-        setUserName(n[1] ?? "");
-        setUserEmail(e[1] ?? "");
+        const t = await AsyncStorage.getItem("jwt_token");
+        setToken(t);
+        if (!t) {
+          setUserName("");
+          setUserEmail("");
+          setProfileImageUrl("");
+          return;
+        }
+        try {
+          const res = await fetch(`${BACKEND_URL}/user/profile`, {
+            headers: { Authorization: `Bearer ${t}` },
+          });
+          if (!res.ok) return;
+          const data = await res.json();
+          setUserName(data.nickname ?? "");
+          setUserEmail(data.email ?? "");
+          setProfileImageUrl(data.imageUrl ?? "");
+        } catch (e) {
+          console.error("프로필 조회 실패", e);
+        }
       })();
     }, [])
   );
@@ -39,10 +59,23 @@ export default function MypageScreen() {
         text: "로그아웃",
         style: "destructive",
         onPress: async () => {
-          await AsyncStorage.multiRemove(["jwt_token", "user_name", "user_email"]);
+          const [accessToken, refreshToken] = await AsyncStorage.multiGet(["jwt_token", "refresh_token"])
+            .then(pairs => pairs.map(([, v]) => v));
+          try {
+            if (accessToken && refreshToken) {
+              await fetch(
+                `${BACKEND_URL}/auth/logout?accessToken=${encodeURIComponent(accessToken)}&refreshToken=${encodeURIComponent(refreshToken)}`,
+                { method: "POST" }
+              );
+            }
+          } catch (e) {
+            console.error("로그아웃 요청 실패", e);
+          }
+          await AsyncStorage.multiRemove(["jwt_token", "refresh_token"]);
           setToken(null);
           setUserName("");
           setUserEmail("");
+          setProfileImageUrl("");
         },
       },
     ]);
@@ -73,7 +106,11 @@ export default function MypageScreen() {
           // 로그인 상태
           <View style={S.profileCard}>
             <View style={S.profileImage}>
-              <Ionicons name="person" size={34} color="#5B9CF6" />
+              {profileImageUrl ? (
+                <Image source={{ uri: profileImageUrl }} style={S.profileImagePic} />
+              ) : (
+                <Ionicons name="person" size={34} color="#5B9CF6" />
+              )}
             </View>
             <View style={S.profileInfo}>
               <Text style={S.profileName}>{userName || "사용자"}</Text>
@@ -148,7 +185,9 @@ const S = StyleSheet.create({
   profileImage: {
     width: 52, height: 52, borderRadius: 26,
     backgroundColor: "#EBF3FF", alignItems: "center", justifyContent: "center",
+    overflow: "hidden",
   },
+  profileImagePic: { width: 52, height: 52 },
   profileInfo: { flex: 1, marginLeft: 14 },
   profileName: { fontSize: 16, fontWeight: "700", color: "#111" },
   profileEmail: { fontSize: 13, color: "#888", marginTop: 2 },

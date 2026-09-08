@@ -61,6 +61,8 @@ export default function LoginScreen() {
   const handleGoogleLogin = async () => {
     try {
       await GoogleSignin.hasPlayServices();
+      // 이전에 승인한 계정이 있으면 선택 창 없이 조용히 로그인되므로, 매번 계정 선택 창이 뜨도록 먼저 로그아웃
+      await GoogleSignin.signOut();
       await GoogleSignin.signIn();
       const { accessToken } = await GoogleSignin.getTokens();
 

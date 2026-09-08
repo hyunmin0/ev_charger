@@ -60,7 +60,7 @@ public class ReviewService {
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 리뷰입니다."));
 
-        if (!review.getUser().equals(user)) {
+        if (!review.getUser().getUserId().equals(user.getUserId())) {
             throw new IllegalArgumentException("본인 리뷰만 수정할 수 있습니다.");
         }
 
@@ -77,7 +77,7 @@ public class ReviewService {
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 리뷰입니다."));
 
-        if (!review.getUser().equals(user)) {
+        if (!review.getUser().getUserId().equals(user.getUserId())) {
             throw new IllegalArgumentException("본인 리뷰만 삭제할 수 있습니다.");
         }
 
@@ -136,7 +136,7 @@ public class ReviewService {
                         imageMap.getOrDefault(r.getReviewId(), List.of()), // 이미지 없으면 빈 리스트
                         r.getCreatedAt(),
                         // user가 없으면 false 반환
-                        r.getUser().equals(user),
+                        user != null && r.getUser().getUserId().equals(user.getUserId()),
                         !r.getCreatedAt().equals(r.getUpdatedAt()) // 수정여부
                 ))
                 .toList();

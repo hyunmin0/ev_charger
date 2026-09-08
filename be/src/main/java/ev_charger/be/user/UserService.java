@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(readOnly=true) // 조회를 기본값으로(메모리 사용 감소 등 최적화)
 public class UserService {
+    private final UserRepository userRepository;
     private final ProfileImageRepository profileImageRepository;
     private final UserCarRepository userCarRepository;
     private final ReviewRepository reviewRepository;
@@ -55,13 +56,18 @@ public class UserService {
      * @return nickname, email(없으면 null), profileImageUrl(없으면 null), 내 차량 수, 즐겨찾기 수, 충전기 알림 수
      */
     public UserResponse getProfile(User user) {
+        // 인증 필터에서 조회된 user는 이미 세션이 닫힌 detached 상태라
+        // LAZY 연관관계(profileImage)에 접근하려면 현재 트랜잭션 안에서 다시 조회해야 함
+        User attachedUser = userRepository.findById(user.getUserId())
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 유저"));
+
         return new UserResponse(
-                user.getNickname(),
-                user.getEmail(),
-                user.getProfileImage() != null ? user.getProfileImage().getImageUrl():null,
-                userCarRepository.countByUser(user),
-                reviewRepository.countByUser(user),
-                chargerAlertRepository.countByUser(user)
+                attachedUser.getNickname(),
+                attachedUser.getEmail(),
+                attachedUser.getProfileImage() != null ? attachedUser.getProfileImage().getImageUrl():null,
+                userCarRepository.countByUser(attachedUser),
+                reviewRepository.countByUser(attachedUser),
+                chargerAlertRepository.countByUser(attachedUser)
         );
     }
 }
