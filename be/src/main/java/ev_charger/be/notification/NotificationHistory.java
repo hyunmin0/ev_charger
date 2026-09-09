@@ -46,14 +46,14 @@ public class NotificationHistory {
     @Column(name="created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @Builder(builderMethodName = "alertBuilder")
+    @Builder(builderMethodName = "alertBuilder", builderClassName = "AlertBuilder")
     public NotificationHistory(Charger charger, User user) {
         this.statId = charger.getStatId();
         this.chgerId = charger.getChgerId();
         this.user = user;
     }
 
-    @Builder(builderMethodName = "noticeBuilder")
+    @Builder(builderMethodName = "noticeBuilder", builderClassName = "NoticeBuilder")
     public NotificationHistory(Notice notice, User user) {
         this.notice = notice;
         this.user = user;

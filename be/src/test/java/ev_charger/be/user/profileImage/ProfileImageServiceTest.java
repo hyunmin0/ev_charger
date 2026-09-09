@@ -2,6 +2,7 @@ package ev_charger.be.user.profileImage;
 
 import ev_charger.be.user.profileImage.dto.response.ProfileImageResponse;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -64,7 +65,7 @@ class ProfileImageServiceTest {
     }
 
     @AfterEach
-    void tearDown() {
-        System.out.println("경과 시간: " + (System.currentTimeMillis() - startTime) + "ms");
+    void tearDown(TestInfo testInfo) {
+        System.out.println(testInfo.getDisplayName() + " 경과 시간: " + (System.currentTimeMillis() - startTime) + "ms");
     }
 }

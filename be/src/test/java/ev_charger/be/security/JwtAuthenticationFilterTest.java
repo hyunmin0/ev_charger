@@ -2,6 +2,7 @@ package ev_charger.be.security;
 
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -143,8 +144,8 @@ public class JwtAuthenticationFilterTest {
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown(TestInfo testInfo) {
         SecurityContextHolder.clearContext();
-        System.out.println("경과된 시간:" + (System.currentTimeMillis() - startTime) + "ms");
+        System.out.println(testInfo.getDisplayName() + " 경과 시간: " + (System.currentTimeMillis() - startTime) + "ms");
     }
 }

@@ -8,6 +8,7 @@ import ev_charger.be.user.profileImage.ProfileImage;
 import ev_charger.be.user.profileImage.ProfileImageRepository;
 import ev_charger.be.user.userCar.UserCarRepository;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -134,7 +135,7 @@ class UserServiceTest {
     }
 
     @AfterEach
-    void tearDown() {
-        System.out.println("경과 시간: " + (System.currentTimeMillis() - startTime) + "ms");
+    void tearDown(TestInfo testInfo) {
+        System.out.println(testInfo.getDisplayName() + " 경과 시간: " + (System.currentTimeMillis() - startTime) + "ms");
     }
 }

@@ -3,6 +3,7 @@ package ev_charger.be.security;
 import ev_charger.be.user.User;
 import ev_charger.be.user.UserRepository;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -84,7 +85,7 @@ public class CustomUserDetailsServiceTest {
     }
 
     @AfterEach
-    void tearDown() {
-        System.out.println("경과된 시간:" + (System.currentTimeMillis() - startTime) + "ms");
+    void tearDown(TestInfo testInfo) {
+        System.out.println(testInfo.getDisplayName() + " 경과 시간: " + (System.currentTimeMillis() - startTime) + "ms");
     }
 }

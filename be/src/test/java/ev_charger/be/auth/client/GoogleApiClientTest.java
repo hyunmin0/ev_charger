@@ -4,6 +4,7 @@ import com.sun.net.httpserver.HttpServer;
 import ev_charger.be.auth.dto.response.UserInfo;
 import ev_charger.be.user.enums.Provider;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -31,9 +32,9 @@ class GoogleApiClientTest {
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown(TestInfo testInfo) {
         server.stop(0);
-        System.out.println("경과된 시간:" + (System.currentTimeMillis() - startTime) + "ms");
+        System.out.println(testInfo.getDisplayName() + " 경과 시간: " + (System.currentTimeMillis() - startTime) + "ms");
     }
 
     // 구글 서버 흉내: 요청 헤더 기록하고 지정된 JSON을 200으로 응답

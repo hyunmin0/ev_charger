@@ -72,7 +72,10 @@ public class NotificationHistoryService {
      */
     @Transactional
     public void deleteHistory(User user, Long id) {
-        notificationHistoryRepository.deleteByIdAndUser(id, user);
+        NotificationHistory history = notificationHistoryRepository.findByIdAndUser(id, user)
+                .orElseThrow(() -> new IllegalArgumentException("알림 기록이 없습니다."));
+
+        notificationHistoryRepository.delete(history);
     }
 
     /**

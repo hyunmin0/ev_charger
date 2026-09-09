@@ -1,6 +1,7 @@
 package ev_charger.be.security;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -121,7 +122,7 @@ public class JwtProviderTest {
     }
 
     @AfterEach
-    void tearDown() {
-        System.out.println("경과된 시간:" + (System.currentTimeMillis() - startTime) + "ms");
+    void tearDown(TestInfo testInfo) {
+        System.out.println(testInfo.getDisplayName() + " 경과 시간: " + (System.currentTimeMillis() - startTime) + "ms");
     }
 }

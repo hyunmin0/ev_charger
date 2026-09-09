@@ -22,9 +22,6 @@ public interface NotificationHistoryRepository extends JpaRepository<Notificatio
     // 충전기 알림 기록 조회
     List<NotificationHistory> findByUserAndChgerIdIsNotNull(User user, Sort sort);
 
-    // 특정 알림 기록 삭제 (본인 소유 확인)
-    void deleteByIdAndUser(Long id, User user);
-
     // 모든 충전기 알림 기록 삭제
     void deleteByUserAndChgerIdIsNotNull(User user);
 
