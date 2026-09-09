@@ -2,13 +2,17 @@ package ev_charger.be.notification;
 
 import ev_charger.be.charger_alert.ChargerAlert;
 import ev_charger.be.notice.Notice;
+import ev_charger.be.notification.dto.NotificationHistoryResponse;
 import ev_charger.be.user.User;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 
 @Service
@@ -43,8 +47,6 @@ public class NotificationHistoryService {
 
     /**
      * 충전기 알림 읽음 처리
-     * @param user
-     * @param id
      */
     @Transactional
     public void markAsRead(User user, Long id) {
@@ -52,6 +54,33 @@ public class NotificationHistoryService {
                 .orElseThrow(() -> new IllegalArgumentException("알림 기록이 없습니다."));
 
         history.updateIsRead();
+    }
+
+    /**
+     * 충전기 알림 기록 조회
+     */
+    public List<NotificationHistoryResponse> getChargerAlertHistories(User user) {
+        return notificationHistoryRepository
+                .findByUserAndChgerIdIsNotNull(user, Sort.by(Sort.Direction.DESC, "createdAt"))
+                .stream()
+                .map(h -> new NotificationHistoryResponse(h.getId(), h.getStatId(), h.getChgerId(), h.getCreatedAt(), h.isRead()))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 단건 알림 기록 삭제
+     */
+    @Transactional
+    public void deleteHistory(User user, Long id) {
+        notificationHistoryRepository.deleteByIdAndUser(id, user);
+    }
+
+    /**
+     * 모든 충전기 알림 기록 삭제
+     */
+    @Transactional
+    public void deleteAllChargerAlertHistories(User user) {
+        notificationHistoryRepository.deleteByUserAndChgerIdIsNotNull(user);
     }
 
     /**

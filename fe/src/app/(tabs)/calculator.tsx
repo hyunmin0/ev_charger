@@ -1,19 +1,25 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   TextInput, PanResponder,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import api from "@/lib/api";
 
 const ACCENT = "#5B9CF6";
 
-const CARS = ["선택 안함", "현대 아이오닉 5", "기아 EV9"];
-const CAR_CAPACITY: Record<string, number> = {
-  "선택 안함": 64,
-  "현대 아이오닉 5": 72.6,
-  "기아 EV9": 99.8,
-};
+// 비로그인 기본 차종 목록
+const BASE_CARS = [
+  { label: "선택 안함", capacity: 64 },
+  { label: "현대 아이오닉 5 (72.6kWh)", capacity: 72.6 },
+  { label: "현대 아이오닉 6 (77.4kWh)", capacity: 77.4 },
+  { label: "기아 EV6 (77.4kWh)", capacity: 77.4 },
+  { label: "기아 EV9 (99.8kWh)", capacity: 99.8 },
+  { label: "테슬라 모델 3 (75kWh)", capacity: 75 },
+  { label: "테슬라 모델 Y (75kWh)", capacity: 75 },
+];
+
 const CHARGERS = [
   { label: "완속 AC (3kW)", kw: 3, type: "완속" },
   { label: "완속 AC (7kW)", kw: 7, type: "완속" },
@@ -49,7 +55,7 @@ function Slider({ min, max, step, value, onChange }: {
     })
   ).current;
 
- const thumbPct = (value - min) / (max - min);
+  const thumbPct = (value - min) / (max - min);
 
   return (
     <View
@@ -73,7 +79,10 @@ function Slider({ min, max, step, value, onChange }: {
   );
 }
 
+type CarOption = { label: string; capacity: number; isMine?: boolean };
+
 export default function CalculatorScreen() {
+  const [carOptions, setCarOptions] = useState<CarOption[]>(BASE_CARS);
   const [car, setCar] = useState("선택 안함");
   const [dropCar, setDropCar] = useState(false);
   const [dropCharger, setDropCharger] = useState(false);
@@ -84,11 +93,27 @@ export default function CalculatorScreen() {
   const [availableMin, setAvailableMin] = useState("");
   const [result, setResult] = useState<string | null>(null);
 
+  useEffect(() => {
+    // 로그인된 경우 내 차 목록을 상단에 추가
+    api.get<{ userCarId: number; carName: string; batteryCapacity: number }[]>("/user/cars")
+      .then(res => {
+        if (res.data.length > 0) {
+          const myCars: CarOption[] = res.data.map(c => ({
+            label: `⭐ ${c.carName}`,
+            capacity: c.batteryCapacity,
+            isMine: true,
+          }));
+          setCarOptions([BASE_CARS[0], ...myCars, ...BASE_CARS.slice(1)]);
+        }
+      })
+      .catch(() => {}); // 비로그인이면 무시
+  }, []);
+
   const isFast = charger.type === "급속";
   const targetMax = isFast ? 80 : 100;
 
   const calculate = () => {
-    const capacity = CAR_CAPACITY[car];
+    const capacity = carOptions.find(c => c.label === car)?.capacity ?? 64;
     if (mode === "target") {
       if (targetSoc <= soc) { setResult("목표 배터리가 현재 잔량보다 낮아요."); return; }
       const hours = ((targetSoc - soc) / 100) * capacity / charger.kw;
@@ -122,11 +147,13 @@ export default function CalculatorScreen() {
         <>
           <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setDropCar(false)} />
           <View style={s.dropdown}>
-            {CARS.map((c) => (
-              <TouchableOpacity key={c} style={[s.dropItem, c === car && s.dropActive]}
-                onPress={() => { setCar(c); setDropCar(false); }}>
-                <Text style={[s.dropText, c === car && s.dropTextOn]}>{c}</Text>
-                {c === car && <Ionicons name="checkmark" size={16} color={ACCENT} />}
+            {carOptions.map((c) => (
+              <TouchableOpacity key={c.label} style={[s.dropItem, c.label === car && s.dropActive]}
+                onPress={() => { setCar(c.label); setDropCar(false); setResult(null); }}>
+                <Text style={[s.dropText, c.label === car && s.dropTextOn, c.isMine && s.dropTextMine]}>
+                  {c.label}
+                </Text>
+                {c.label === car && <Ionicons name="checkmark" size={16} color={ACCENT} />}
               </TouchableOpacity>
             ))}
           </View>
@@ -239,6 +266,7 @@ const s = StyleSheet.create({
   dropActive: { backgroundColor: "#EBF3FF" },
   dropText: { fontSize: 15, color: "#333" },
   dropTextOn: { color: ACCENT, fontWeight: "600" },
+  dropTextMine: { color: "#5B9CF6" },
   content: { padding: 16, gap: 12, paddingBottom: 40 },
   card: { backgroundColor: "#f8f9ff", borderRadius: 14, padding: 16 },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
