@@ -48,6 +48,7 @@ public class StationController {
     public ResponseEntity<StationDetailResponse> getStationDetail(
             @AuthenticationPrincipal CustomUserDetails userDetails, // 비로그인 시 null
             @PathVariable String statId) {
-        return ResponseEntity.ok(stationService.getStationDetail(userDetails.getUser(), statId));
+         return ResponseEntity.ok(stationService.getStationDetail(
+                userDetails != null ? userDetails.getUser() : null, statId));
     }
 }

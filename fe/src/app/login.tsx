@@ -9,26 +9,23 @@ import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { BACKEND_URL } from "@/lib/api";
 
-// USB로 연결해서 adb reverse tcp:8080 tcp:8080으로 포트를 넘겨받는 구성이라 localhost로 접근함
-// (와이파이로 테스트할 땐 대신 컴퓨터의 LAN IP를 넣어야 함)
-const BACKEND_URL = "http://localhost:8080";
+const CALLBACK_PREFIX = "evcharger://oauth/callback";
 
-const KAKAO_REST_API_KEY = "da7c455f848e4647403a7998bdb5ff6d";
+type Provider = "kakao" | "google";
+
+const KAKAO_REST_API_KEY = process.env.EXPO_PUBLIC_KAKAO_REST_KEY ?? "";
 const KAKAO_REDIRECT_URI = "http://localhost/";
 const KAKAO_AUTH_URL =
   `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_REST_API_KEY}` +
   `&redirect_uri=${encodeURIComponent(KAKAO_REDIRECT_URI)}&response_type=code`;
 
-// 네이티브 구글 로그인 SDK가 서버에서 검증 가능한 토큰을 받으려면
-// "웹 애플리케이션" 타입 클라이언트 ID가 필요함 (Android 클라이언트 ID와는 다름)
-const GOOGLE_WEB_CLIENT_ID = "386508397583-v6tuoduhkk5o7abv9shbgeg4nakoc8ll.apps.googleusercontent.com";
-
-type Provider = "kakao" | "google";
+const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? "";
 
 export default function LoginScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();   // ← 핵심 fix
+  const insets = useSafeAreaInsets();
   const [oauthUrl, setOauthUrl] = useState<string | null>(null);
   const [webLoading, setWebLoading] = useState(false);
 
@@ -46,7 +43,6 @@ export default function LoginScreen() {
     setOauthUrl(null);
 
     try {
-      // 카카오: code만 보내면 백엔드가 토큰 교환까지 처리 (client_secret 이슈 회피)
       const loginRes = await fetch(
         `${BACKEND_URL}/auth/login/kakao/code?code=${encodeURIComponent(code)}`,
         { method: "POST" }
@@ -57,11 +53,9 @@ export default function LoginScreen() {
     }
   };
 
-  // 구글은 WebView/브라우저 리다이렉트 로그인을 막아놔서 네이티브 SDK를 써야 함
   const handleGoogleLogin = async () => {
     try {
       await GoogleSignin.hasPlayServices();
-      // 이전에 승인한 계정이 있으면 선택 창 없이 조용히 로그인되므로, 매번 계정 선택 창이 뜨도록 먼저 로그아웃
       await GoogleSignin.signOut();
       await GoogleSignin.signIn();
       const { accessToken } = await GoogleSignin.getTokens();
@@ -121,8 +115,7 @@ export default function LoginScreen() {
         animationType="slide"
         onRequestClose={() => setOauthUrl(null)}
       >
-        {/* SafeAreaView 대신 View + paddingTop: insets.top — Modal 안에서 확실히 동작 */}
-         <View style={[S.modalContainer, { paddingTop: Math.max(insets.top - 20, 0) }]}>
+        <View style={[S.modalContainer, { paddingTop: Math.max(insets.top - 20, 0) }]}>
           <View style={S.wvHeader}>
             <TouchableOpacity onPress={() => setOauthUrl(null)} style={S.wvClose}>
               <Ionicons name="close" size={24} color="#111" />

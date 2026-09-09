@@ -1,64 +1,197 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions,
+  ActivityIndicator, Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import api from "@/lib/api";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-const MOCK_DETAIL = {
-  id: "1",
-  name: "한국도로교통공단 광주전남지부",
-  operator: "교육공공시설",
-  tags: ["표", "일반가", "급속", "무료주차", "개방"],
-  address: "광주 북구 대천동 100번지 25 제1층",
-  hours: "09:00~18:00 (토·일·공휴일 제외)",
-  phone: "1522-2573",
-  facility: "교육공공시설",
-  environment: "실외",
-  floor: "지상",
-  parking: "무료",
-  congestionPrediction: [
-    { time: "지금", level: "보통" },
-    { time: "1시간 뒤", level: "혼잡" },
-    { time: "2시간 뒤", level: "보통" },
-    { time: "3시간 뒤", level: "원활" },
-    { time: "4시간 뒤", level: "원활" },
-  ],
-  chargers: [
-    { id: "C01", status: "available", type: "DC 콤보", speed: "100kW" },
-    { id: "C02", status: "charging", type: "DC 콤보", speed: "100kW" },
-    { id: "C03", status: "paying", type: "DC 콤보", speed: "100kW" },
-    { id: "C04", status: "available", type: "DC 콤보", speed: "100kW" },
-    { id: "C05", status: "charging", type: "DC 콤보", speed: "100kW" },
-    { id: "C06", status: "available", type: "DC 콤보", speed: "100kW" },
-  ],
-  reviews: [
-    { id: "r1", author: "홍*동", rating: 4, content: "접근하기 편하고 충전 속도 만족!", date: "2025.06.12" },
-    { id: "r2", author: "이*신", rating: 3, content: "주차공간이 좁지만 쓸만함", date: "2025.06.08" },
-  ],
-  reviewCount: 3,
-  rating: 4.5,
+type CongestionLevel = "여유" | "보통" | "혼잡" | null;
+
+type ChgerStat = "UNKNOWN" | "COMM_ERROR" | "WAITING" | "CHARGING" | "SUSPENDED" | "INSPECTION" | "RESERVED" | "UNCONFIRMED";
+
+type ChgerType =
+  | "DC_DEMO" | "AC_SLOW" | "DC_DEMO_AC3" | "DC_COMBO"
+  | "DC_DEMO_DE_COMBO" | "DC_DEMO_AC3_DC_COMBO" | "AC3"
+  | "DC_COMBO_SLOW" | "NACS" | "DC_COMBO_NACS" | "DC_COMBO2_BUS";
+
+type ChgerDetail = {
+  chgerId: string;
+  chgerType: ChgerType;
+  output: string;
+  chgerStat: ChgerStat;
+  isAlert: boolean;
 };
 
-const STATUS_CONFIG = {
+type ReviewItem = {
+  reviewId: number;
+  nickname: string;
+  profileImageUrl: string | null;
+  rating: number;
+  content: string;
+  imageUrls: string[];
+  createdAt: string;
+  isMyReview: boolean;
+  isEdited: boolean;
+};
+
+type StationDetail = {
+  statId: string;
+  statNm: string;
+  addr: string;
+  addrDetail: string | null;
+  useTime: string;
+  parkingFree: boolean | null;
+  note: string | null;
+  openToPublic: boolean | null;
+  limitDetail: string | null;
+  kind: string;
+  kindDetail: string | null;
+  floorNum: string | null;
+  floorType: string | null;
+  hasFast: boolean;
+  busiNm: string;
+  busiCall: string | null;
+  averageRating: number | null;
+  reviewCount: number;
+  isFavorite: boolean | null;
+  chargers: ChgerDetail[];
+  reviews: ReviewItem[];
+  congestions: {
+    accuracy: number | null;
+    oneHour: CongestionLevel;
+    twoHour: CongestionLevel;
+    threeHour: CongestionLevel;
+  } | null;
+};
+
+const CHGER_TYPE_LABEL: Record<ChgerType, string> = {
+  DC_DEMO: "DC 차데모",
+  AC_SLOW: "AC 완속",
+  DC_DEMO_AC3: "DC차데모+AC3상",
+  DC_COMBO: "DC 콤보",
+  DC_DEMO_DE_COMBO: "DC차데모+DC콤보",
+  DC_DEMO_AC3_DC_COMBO: "DC차데모+AC3상+DC콤보",
+  AC3: "AC 3상",
+  DC_COMBO_SLOW: "DC콤보(완속)",
+  NACS: "NACS",
+  DC_COMBO_NACS: "DC콤보+NACS",
+  DC_COMBO2_BUS: "DC콤보2(버스)",
+};
+
+const CHGER_STATUS_CONFIG: Record<string, { color: string; bg: string; label: string }> = {
   available: { color: "#4CAF50", bg: "#F0FBF0", label: "충전가능" },
-  charging: { color: "#FF9800", bg: "#FFF8F0", label: "충전중" },
-  paying: { color: "#F44336", bg: "#FFF0F0", label: "결제중" },
+  charging:  { color: "#FF9800", bg: "#FFF8F0", label: "충전중"  },
+  reserved:  { color: "#F44336", bg: "#FFF0F0", label: "예약중"  },
+  unknown:   { color: "#aaa",    bg: "#f5f5f5", label: "상태불명" },
 };
 
-const congColor = (level: string) =>
-  level === "원활" ? "#4CAF50" : level === "보통" ? "#FF9800" : "#F44336";
+function chgerStatKey(stat: ChgerStat) {
+  if (stat === "WAITING") return "available";
+  if (stat === "CHARGING") return "charging";
+  if (stat === "RESERVED") return "reserved";
+  return "unknown";
+}
+
+const congColor = (level: CongestionLevel) =>
+  level === "여유" ? "#4CAF50" : level === "보통" ? "#FF9800" : level === "혼잡" ? "#F44336" : "#aaa";
+
+function formatDate(iso: string) {
+  return iso.slice(0, 10).replace(/-/g, ".");
+}
 
 export default function StationDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const [station, setStation] = useState<StationDetail | null>(null);
+  const [loading, setLoading] = useState(true);
   const [bookmarked, setBookmarked] = useState(false);
+  const [bookmarkLoading, setBookmarkLoading] = useState(false);
 
-  const station = MOCK_DETAIL;
-  const availableCount = station.chargers.filter((c) => c.status === "available").length;
+  useEffect(() => {
+    if (!id) return;
+    (async () => {
+      try {
+        const res = await api.get<StationDetail>(`/stations/${id}`);
+        setStation(res.data);
+        setBookmarked(res.data.isFavorite ?? false);
+      } catch {
+        Alert.alert("오류", "충전소 정보를 불러오지 못했습니다.");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [id]);
+
+  const toggleBookmark = useCallback(async () => {
+    if (!station || bookmarkLoading) return;
+    setBookmarkLoading(true);
+    try {
+      if (bookmarked) {
+        await api.delete(`/favorites/${station.statId}`);
+        setBookmarked(false);
+      } else {
+        await api.post(`/favorites/${station.statId}`);
+        setBookmarked(true);
+      }
+    } catch {
+      Alert.alert("오류", "즐겨찾기 변경에 실패했습니다.");
+    } finally {
+      setBookmarkLoading(false);
+    }
+  }, [station, bookmarked, bookmarkLoading]);
+
+  const stationTags: string[] = station ? [
+    station.hasFast ? "급속" : "완속",
+    ...(station.parkingFree ? ["무료주차"] : []),
+    station.openToPublic ? "개방" : "비개방",
+    station.kind,
+  ] : [];
+
+  const availableCount = station?.chargers.filter(c => chgerStatKey(c.chgerStat) === "available").length ?? 0;
+
+  const congestionItems: { time: string; level: CongestionLevel }[] = station?.congestions ? [
+    { time: "1시간 뒤", level: station.congestions.oneHour },
+    { time: "2시간 뒤", level: station.congestions.twoHour },
+    { time: "3시간 뒤", level: station.congestions.threeHour },
+  ] : [];
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
+            <Ionicons name="chevron-back" size={24} color="#111" />
+          </TouchableOpacity>
+          <View style={styles.headerCenter} />
+          <View style={styles.headerBtn} />
+        </View>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#5B9CF6" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!station) {
+    return (
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
+            <Ionicons name="chevron-back" size={24} color="#111" />
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>충전소 정보 없음</Text>
+          </View>
+          <View style={styles.headerBtn} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -67,10 +200,10 @@ export default function StationDetailScreen() {
           <Ionicons name="chevron-back" size={24} color="#111" />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle} numberOfLines={1}>{station.name}</Text>
-          <Text style={styles.headerSub}>{station.operator}</Text>
+          <Text style={styles.headerTitle} numberOfLines={1}>{station.statNm}</Text>
+          <Text style={styles.headerSub}>{station.busiNm}</Text>
         </View>
-        <TouchableOpacity onPress={() => setBookmarked(!bookmarked)} style={styles.headerBtn}>
+        <TouchableOpacity onPress={toggleBookmark} style={styles.headerBtn} disabled={bookmarkLoading}>
           <Ionicons
             name={bookmarked ? "star" : "star-outline"}
             size={22}
@@ -81,7 +214,7 @@ export default function StationDetailScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
         <View style={styles.tagRow}>
-          {station.tags.map((t) => (
+          {stationTags.map((t) => (
             <View key={t} style={styles.tag}>
               <Text style={styles.tagText}>{t}</Text>
             </View>
@@ -91,24 +224,27 @@ export default function StationDetailScreen() {
         <View style={styles.infoCard}>
           <View style={styles.infoRow}>
             <Ionicons name="location-outline" size={17} color="#5B9CF6" style={styles.infoIcon} />
-            <Text style={styles.infoText}>{station.address}</Text>
+            <Text style={styles.infoText}>{station.addr}{station.addrDetail ? ` ${station.addrDetail}` : ""}</Text>
           </View>
           <View style={styles.infoRow}>
             <Ionicons name="time-outline" size={17} color="#5B9CF6" style={styles.infoIcon} />
-            <Text style={styles.infoText}>{station.hours}</Text>
+            <Text style={styles.infoText}>{station.useTime}</Text>
           </View>
           <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
             <Ionicons name="call-outline" size={17} color="#5B9CF6" style={styles.infoIcon} />
-            <Text style={styles.infoText}>{station.phone}</Text>
-            <Text style={styles.telLink}>전화</Text>
+            <Text style={styles.infoText}>{station.busiCall ?? "-"}</Text>
+            {station.busiCall ? <Text style={styles.telLink}>전화</Text> : null}
           </View>
         </View>
 
         <View style={styles.extraCard}>
           {[
-            { label: "시설명", value: station.facility },
-            { label: "이용환경", value: `${station.environment} ${station.floor}` },
-            { label: "주차요금", value: station.parking },
+            { label: "시설명", value: station.kind },
+            {
+              label: "이용환경",
+              value: [station.floorType, station.floorNum].filter(Boolean).join(" ") || "-",
+            },
+            { label: "주차요금", value: station.parkingFree ? "무료" : "유료" },
           ].map(({ label, value }, i, arr) => (
             <View key={label} style={[styles.extraRow, i === arr.length - 1 && { borderBottomWidth: 0 }]}>
               <Text style={styles.extraLabel}>{label}</Text>
@@ -117,23 +253,25 @@ export default function StationDetailScreen() {
           ))}
         </View>
 
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>혼잡도 예측</Text>
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={{ flexDirection: "row", gap: 10, paddingVertical: 4 }}>
-              {station.congestionPrediction.map((item) => (
-                <View key={item.time} style={styles.congItem}>
-                  <View style={[styles.congBadge, { backgroundColor: congColor(item.level) }]}>
-                    <Text style={styles.congLabel}>{item.level}</Text>
-                  </View>
-                  <Text style={styles.congTime}>{item.time}</Text>
-                </View>
-              ))}
+        {congestionItems.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>혼잡도 예측</Text>
             </View>
-          </ScrollView>
-        </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={{ flexDirection: "row", gap: 10, paddingVertical: 4 }}>
+                {congestionItems.map((item) => (
+                  <View key={item.time} style={styles.congItem}>
+                    <View style={[styles.congBadge, { backgroundColor: congColor(item.level) }]}>
+                      <Text style={styles.congLabel}>{item.level ?? "정보없음"}</Text>
+                    </View>
+                    <Text style={styles.congTime}>{item.time}</Text>
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+        )}
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -145,13 +283,14 @@ export default function StationDetailScreen() {
           </View>
           <View style={styles.chargerGrid}>
             {station.chargers.map((c) => {
-              const cfg = STATUS_CONFIG[c.status as keyof typeof STATUS_CONFIG];
+              const key = chgerStatKey(c.chgerStat);
+              const cfg = CHGER_STATUS_CONFIG[key];
               return (
-                <View key={c.id} style={[styles.chargerCard, { backgroundColor: cfg.bg }]}>
+                <View key={c.chgerId} style={[styles.chargerCard, { backgroundColor: cfg.bg }]}>
                   <View style={[styles.statusDot, { backgroundColor: cfg.color }]} />
                   <Text style={[styles.chargerStatus, { color: cfg.color }]}>{cfg.label}</Text>
-                  <Text style={styles.chargerType}>{c.type}</Text>
-                  <Text style={styles.chargerSpeed}>충전 속도 {c.speed}</Text>
+                  <Text style={styles.chargerType}>{CHGER_TYPE_LABEL[c.chgerType] ?? c.chgerType}</Text>
+                  <Text style={styles.chargerSpeed}>충전 출력 {c.output ?? "-"}</Text>
                 </View>
               );
             })}
@@ -162,23 +301,28 @@ export default function StationDetailScreen() {
           <View style={styles.sectionHeader}>
             <View style={styles.ratingRow}>
               <Ionicons name="star" size={14} color="#FFB800" />
-              <Text style={styles.ratingText}>{station.rating}</Text>
-              <Text style={styles.reviewCount}>리뷰 {station.reviewCount}개</Text>
+              <Text style={styles.ratingText}>
+                {station.averageRating != null ? station.averageRating.toFixed(1) : "-"}
+              </Text>
+              <Text style={styles.reviewCountText}>리뷰 {station.reviewCount}개</Text>
             </View>
-            <TouchableOpacity style={styles.writeBtn}>
+            <TouchableOpacity
+              style={styles.writeBtn}
+              onPress={() => Alert.alert("준비 중", "리뷰 작성 기능을 준비 중입니다.")}
+            >
               <Text style={styles.writeBtnText}>리뷰 작성</Text>
             </TouchableOpacity>
           </View>
           {station.reviews.map((r) => (
-            <View key={r.id} style={styles.reviewCard}>
+            <View key={r.reviewId} style={styles.reviewCard}>
               <View style={styles.reviewTop}>
-                <Text style={styles.reviewAuthor}>{r.author}</Text>
+                <Text style={styles.reviewAuthor}>{r.nickname}</Text>
                 <View style={{ flexDirection: "row", gap: 1 }}>
                   {Array.from({ length: 5 }, (_, i) => (
                     <Ionicons key={i} name={i < r.rating ? "star" : "star-outline"} size={12} color="#FFB800" />
                   ))}
                 </View>
-                <Text style={styles.reviewDate}>{r.date}</Text>
+                <Text style={styles.reviewDate}>{formatDate(r.createdAt)}</Text>
               </View>
               <Text style={styles.reviewContent}>{r.content}</Text>
             </View>
@@ -190,7 +334,8 @@ export default function StationDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f8f9fb"},
+  container: { flex: 1, backgroundColor: "#f8f9fb" },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
   header: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", paddingHorizontal: 4, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#f0f0f0" },
   headerBtn: { padding: 10 },
   headerCenter: { flex: 1, marginHorizontal: 2 },
@@ -224,7 +369,7 @@ const styles = StyleSheet.create({
   chargerSpeed: { fontSize: 11, color: "#888" },
   ratingRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   ratingText: { fontSize: 15, fontWeight: "700", color: "#111" },
-  reviewCount: { fontSize: 13, color: "#888" },
+  reviewCountText: { fontSize: 13, color: "#888" },
   writeBtn: { paddingHorizontal: 14, paddingVertical: 6, backgroundColor: "#EBF3FF", borderRadius: 8 },
   writeBtnText: { fontSize: 13, color: "#5B9CF6", fontWeight: "600" },
   reviewCard: { backgroundColor: "#fff", borderRadius: 12, padding: 14, marginBottom: 10, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },

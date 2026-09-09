@@ -7,9 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-// USB로 연결해서 adb reverse tcp:8080 tcp:8080으로 포트를 넘겨받는 구성이라 localhost로 접근함
-const BACKEND_URL = "http://localhost:8080";
+import api from "@/lib/api";
 
 type ProfileImage = { id: number; imageUrl: string; name: string };
 
@@ -26,10 +24,9 @@ export default function RegisterScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${BACKEND_URL}/profile-images`);
-        const data: ProfileImage[] = await res.json();
-        setImages(data);
-        if (data.length > 0) setSelectedImageId(data[0].id);
+        const res = await api.get<ProfileImage[]>("/auth/profile-images");
+        setImages(res.data);
+        if (res.data.length > 0) setSelectedImageId(res.data[0].id);
       } catch (e) {
         console.error("프로필 이미지 로드 실패", e);
         Alert.alert("오류", "프로필 이미지를 불러오지 못했습니다.");
@@ -57,22 +54,13 @@ export default function RegisterScreen() {
 
     setSubmitting(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/auth/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tempToken,
-          nickname: trimmed,
-          profileImageId: selectedImageId,
-        }),
+      const res = await api.post("/auth/register", {
+        tempToken,
+        nickname: trimmed,
+        profileImageId: selectedImageId,
       });
 
-      if (!res.ok) {
-        Alert.alert("가입 실패", "잠시 후 다시 시도해주세요.");
-        return;
-      }
-
-      const data = await res.json();
+      const data = res.data;
       if (data.status === "SUCCESS") {
         await AsyncStorage.multiSet([
           ["jwt_token", data.accessToken],

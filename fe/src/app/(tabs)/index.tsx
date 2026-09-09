@@ -1,14 +1,16 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Animated, Dimensions, Modal, Switch,
-  PanResponder, FlatList,
+  PanResponder, FlatList, ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
+import * as Location from "expo-location";
+import api from "@/lib/api";
 
 const KAKAO_API_KEY = "c8ed16f7d0f7208cec6b025168773f5e";
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -33,15 +35,36 @@ const CHARGER_TYPES = ["DC 차데모", "DC 콤보", "DC 콤보 (완속)", "DC �
 const FACILITIES = ["공공시설", "주차시설", "휴게시설", "관광시설", "상업시설", "차량정비시설", "기타시설", "공동주택시설", "근린생활시설", "교육문화시설"];
 const FLOOR_TYPES = ["지상", "지하"];
 
-const MOCK_STATIONS = [
-  { id: "1", name: "한국도로교통공단 광주전남지부", operator: "교육공공시설", operatorType: "급속", distance: "4.5 km", tags: ["표", "일반가", "급속", "무료주차"], rating: 4.5, available: 1, total: 2, prediction: "보통", predictionTime: "1시간 뒤" },
-  { id: "2", name: "광주공업단지 북구 산남대학교공과대학", operator: "교육공공시설", operatorType: "급속", distance: "4.5 km", tags: ["표", "일반가", "급속", "무료주차"], rating: 4.5, available: 3, total: 3, prediction: "혼잡", predictionTime: "1시간 뒤" },
-  { id: "3", name: "북구동 민원안내주차장", operator: "공공시설", operatorType: "완속", distance: "5.1 km", tags: ["표", "무료주차", "개방"], rating: 4.0, available: 0, total: 3, prediction: "원활", predictionTime: "1시간 뒤" },
-  { id: "4", name: "재일풍경채센트럴파크1(입주자대표회의)", operator: "공동주택시설", operatorType: "급속", distance: "5.8 km", tags: ["표", "급속"], rating: 3.8, available: 2, total: 4, prediction: "원활", predictionTime: "1시간 뒤" },
-  { id: "5", name: "신논현역 공영주차장", operator: "공공시설", operatorType: "완속", distance: "6.2 km", tags: ["표", "무료주차", "개방"], rating: 4.2, available: 2, total: 3, prediction: "보통", predictionTime: "1시간 뒤" },
-];
+type Station = {
+  statId: string;
+  statNm: string;
+  busiNm: string;
+  hasFast: boolean;
+  parkingFree: boolean;
+  openToPublic: boolean;
+  averageRating: number | null;
+  availableCount: number;
+  totalCount: number;
+  distance: number;
+  nextHourCongestionLevel: string | null;
+};
 
-const predColor = (p: string) => p === "원활" ? "#4CAF50" : p === "보통" ? "#FF9800" : "#F44336";
+const RADIUS_METERS = [1000, 3000, 5000, 10000, 20000];
+
+function formatDistance(m: number) {
+  return m >= 1000 ? `${(m / 1000).toFixed(1)}km` : `${Math.round(m)}m`;
+}
+
+function stationTags(s: Station) {
+  const tags: string[] = [];
+  if (s.hasFast) tags.push("급속");
+  if (s.parkingFree) tags.push("무료주차");
+  if (s.openToPublic) tags.push("개방");
+  return tags;
+}
+
+const predColor = (p: string | null) =>
+  p === "여유" ? "#4CAF50" : p === "보통" ? "#FF9800" : p === "혼잡" ? "#F44336" : "#aaa";
 
 const mapHTML = `<!DOCTYPE html><html><head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -105,6 +128,12 @@ function RangeSlider({ steps, minIdx, maxIdx, onMin, onMax }: {
 export default function HomeScreen() {
   const router = useRouter();
 
+  const [stations, setStations] = useState<Station[]>([]);
+  const [stationsLoading, setStationsLoading] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const userLat = useRef(35.1595);
+  const userLng = useRef(126.8526);
+
   const [sheetVisible, setSheetVisible] = useState(false);
   const [popupChip, setPopupChip] = useState<string | null>(null);
   const slideAnim = useRef(new Animated.Value(SHEET_HEIGHT)).current;
@@ -112,6 +141,48 @@ export default function HomeScreen() {
   const [freeParking, setFreeParking] = useState(false);
   const [openOnly, setOpenOnly] = useState(false);
   const [radiusIdx, setRadiusIdx] = useState(1);
+
+  const fetchStations = useCallback(async (cursor?: string | null) => {
+    setStationsLoading(true);
+    try {
+      const res = await api.get("/stations/nearby", {
+        params: {
+          lat: userLat.current,
+          lng: userLng.current,
+          range: RADIUS_METERS[radiusIdx],
+          availableOnly: available,
+          ...(cursor ? { cursor } : {}),
+        },
+      });
+      const data = res.data;
+      if (cursor) {
+        setStations(prev => [...prev, ...(data.stations ?? [])]);
+      } else {
+        setStations(data.stations ?? []);
+      }
+      setNextCursor(data.nextCursor ?? null);
+    } catch {
+      if (!cursor) setStations([]);
+    } finally {
+      setStationsLoading(false);
+    }
+  }, [radiusIdx, available]);
+
+  useEffect(() => {
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === "granted") {
+        const loc = await Location.getCurrentPositionAsync({});
+        userLat.current = loc.coords.latitude;
+        userLng.current = loc.coords.longitude;
+      }
+      fetchStations();
+    })();
+  }, []);
+
+  useEffect(() => {
+    fetchStations();
+  }, [radiusIdx, available]);
   const [speedMin, setSpeedMin] = useState(1);
   const [speedMax, setSpeedMax] = useState(3);
   const [selTypes, setSelTypes] = useState<string[]>([]);
@@ -179,38 +250,46 @@ export default function HomeScreen() {
        type: selTypes.length > 0, facility: selFacilities.length > 0,
        floor: selFloor.length > 0 }[id] ?? false);
 
-  const renderStation = ({ item }: { item: typeof MOCK_STATIONS[0] }) => (
-    <TouchableOpacity style={S.card} onPress={() => router.push(`/station/${item.id}` as any)}>
-      <View style={S.cardRow}>
-        <Text style={S.cardName} numberOfLines={2}>{item.name}</Text>
-        <Text style={S.cardDist}>{item.distance}</Text>
-      </View>
-      <View style={S.cardRow2}>
-        <View style={S.stTagRow}>
-          {item.tags.map((t) => (
-            <View key={t} style={S.stTag}><Text style={S.stTagTxt}>{t}</Text></View>
-          ))}
+  const renderStation = ({ item }: { item: Station }) => {
+    const tags = stationTags(item);
+    const pred = item.nextHourCongestionLevel;
+    return (
+      <TouchableOpacity style={S.card} onPress={() => router.push(`/station/${item.statId}` as any)}>
+        <View style={S.cardRow}>
+          <Text style={S.cardName} numberOfLines={2}>{item.statNm}</Text>
+          <Text style={S.cardDist}>{formatDistance(item.distance)}</Text>
         </View>
-        <View style={S.ratingRow}>
-          <Ionicons name="star" size={11} color="#FFB800" />
-          <Text style={S.ratingTxt}>{item.rating.toFixed(1)}</Text>
+        <View style={S.cardRow2}>
+          <View style={S.stTagRow}>
+            {tags.map((t) => (
+              <View key={t} style={S.stTag}><Text style={S.stTagTxt}>{t}</Text></View>
+            ))}
+          </View>
+          {item.averageRating != null && (
+            <View style={S.ratingRow}>
+              <Ionicons name="star" size={11} color="#FFB800" />
+              <Text style={S.ratingTxt}>{item.averageRating.toFixed(1)}</Text>
+            </View>
+          )}
         </View>
-      </View>
-      <Text style={S.cardOp}>{item.operator} · {item.operatorType}</Text>
-      <View style={S.cardBottom}>
-        <View style={S.availRow}>
-          <Text style={S.availLbl}>충전가능 </Text>
-          <Text style={[S.availNum, { color: item.available > 0 ? ACCENT : "#aaa" }]}>{item.available}</Text>
-          <Text style={S.availTotal}>/{item.total}</Text>
+        <Text style={S.cardOp}>{item.busiNm} · {item.hasFast ? "급속" : "완속"}</Text>
+        <View style={S.cardBottom}>
+          <View style={S.availRow}>
+            <Text style={S.availLbl}>충전가능 </Text>
+            <Text style={[S.availNum, { color: item.availableCount > 0 ? ACCENT : "#aaa" }]}>{item.availableCount}</Text>
+            <Text style={S.availTotal}>/{item.totalCount}</Text>
+          </View>
+          {pred && (
+            <View style={[S.predBadge, { backgroundColor: predColor(pred) + "22" }]}>
+              <Text style={[S.predTxt, { color: predColor(pred) }]}>
+                1시간 뒤 {pred} 예상
+              </Text>
+            </View>
+          )}
         </View>
-        <View style={[S.predBadge, { backgroundColor: predColor(item.prediction) + "22" }]}>
-          <Text style={[S.predTxt, { color: predColor(item.prediction) }]}>
-            {item.predictionTime} {item.prediction} 예상
-          </Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={S.container}>
@@ -300,11 +379,21 @@ export default function HomeScreen() {
         )}
 
         <FlatList
-          data={MOCK_STATIONS}
-          keyExtractor={(item) => item.id}
+          data={stations}
+          keyExtractor={(item) => item.statId}
           renderItem={renderStation}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 20 }}
+          onEndReached={() => { if (nextCursor) fetchStations(nextCursor); }}
+          onEndReachedThreshold={0.3}
+          ListFooterComponent={stationsLoading ? <ActivityIndicator style={{ padding: 16 }} color={ACCENT} /> : null}
+          ListEmptyComponent={
+            !stationsLoading ? (
+              <View style={{ alignItems: "center", paddingTop: 40 }}>
+                <Text style={{ color: "#aaa", fontSize: 14 }}>주변 충전소가 없어요</Text>
+              </View>
+            ) : null
+          }
         />
       </Animated.View>
 

@@ -1,60 +1,101 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
+import React, { useState, useCallback } from "react";
+import {
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  ActivityIndicator, Alert,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
+import api from "@/lib/api";
 
-type Charger = { id: string; status: "충전중" | "대기중" | "고장" | "사용불가"; type: string; kw: string; alertOn: boolean };
-type Station = { id: string; name: string; operator: string; hours: string; facility: string; tags: string[]; chargers: Charger[] };
+const ACCENT = "#5B9CF6";
+const ACCENT_BG = "#EBF3FF";
 
-const STATUS_CFG = {
-  충전중: { bg: "#FFF8E1", color: "#F59E0B" },
-  대기중: { bg: "#E8F5E9", color: "#4CAF50" },
-  고장: { bg: "#FFF0F0", color: "#F44336" },
-  사용불가: { bg: "#f2f2f2", color: "#999" },
+type ChgerStat = "UNKNOWN" | "COMM_ERROR" | "WAITING" | "CHARGING" | "SUSPENDED" | "INSPECTION" | "RESERVED" | "UNCONFIRMED";
+
+type AlertedCharger = {
+  chgerId: string;
+  chgerType: string;
+  output: string;
+  chgerStat: ChgerStat;
 };
 
-const INITIAL_STATIONS: Station[] = [
-  {
-    id: "1", name: "한국도로교통공단 광주전남지부", operator: "파워큐브",
-    hours: "24시간 이용가능", facility: "공공주차시설", tags: ["비개방"],
-    chargers: [
-      { id: "C01", status: "충전중", type: "DC 콤보", kw: "100kW", alertOn: false },
-      { id: "C02", status: "충전중", type: "DC 콤보", kw: "100kW", alertOn: false },
-      { id: "C03", status: "충전중", type: "DC 콤보", kw: "100kW", alertOn: true },
-    ],
-  },
-  {
-    id: "2", name: "광주광역시 북구 전남대학교공과대학", operator: "GS차지비",
-    hours: "24시간 이용가능", facility: "교육문화시설", tags: ["무료 주차", "개방"],
-    chargers: [
-      { id: "C01", status: "대기중", type: "DC 콤보", kw: "100kW", alertOn: true },
-      { id: "C02", status: "충전중", type: "AC 완속", kw: "7kW", alertOn: false },
-    ],
-  },
-  {
-    id: "3", name: "재일풍경채센트럴파크1단지입주자대표회의(SP)", operator: "파워큐브",
-    hours: "24시간 이용가능", facility: "공동주택시설", tags: ["비개방"],
-    chargers: [
-      { id: "C01", status: "사용불가", type: "DC 콤보", kw: "50kW", alertOn: false },
-      { id: "C02", status: "사용불가", type: "DC 콤보", kw: "50kW", alertOn: false },
-      { id: "C03", status: "사용불가", type: "DC 콤보", kw: "50kW", alertOn: true },
-    ],
-  },
-];
+type AlertedStation = {
+  statId: string;
+  statNm: string;
+  useTime: string;
+  parkingFree: boolean | null;
+  openToPublic: boolean | null;
+  kind: string | null;
+  floorType: string | null;
+  hasFast: boolean;
+  busiNm: string;
+  alertedChargers: AlertedCharger[];
+};
+
+const STAT_CFG: Record<string, { bg: string; color: string; label: string }> = {
+  WAITING:     { bg: "#E8F5E9", color: "#4CAF50", label: "충전대기" },
+  CHARGING:    { bg: "#FFF8E1", color: "#F59E0B", label: "충전중"   },
+  SUSPENDED:   { bg: "#FFF0F0", color: "#F44336", label: "운영중지"  },
+  INSPECTION:  { bg: "#FFF0F0", color: "#F44336", label: "점검중"   },
+  RESERVED:    { bg: "#f2f2f2", color: "#999",    label: "예약중"   },
+  UNKNOWN:     { bg: "#f2f2f2", color: "#999",    label: "알수없음"  },
+  COMM_ERROR:  { bg: "#f2f2f2", color: "#999",    label: "통신이상"  },
+  UNCONFIRMED: { bg: "#f2f2f2", color: "#999",    label: "미확인"   },
+};
 
 export default function ChargerAlertsScreen() {
   const router = useRouter();
-  const [stations, setStations] = useState(INITIAL_STATIONS);
+  const [stations, setStations] = useState<AlertedStation[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const toggleAlert = (stationId: string, chargerId: string) => {
-    setStations(prev => prev.map(s =>
-      s.id !== stationId ? s : {
-        ...s,
-        chargers: s.chargers.map(c => c.id !== chargerId ? c : { ...c, alertOn: !c.alertOn }),
-      }
-    ));
+  const fetchAlerts = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await api.get<AlertedStation[]>("/charger-alerts");
+      setStations(res.data ?? []);
+    } catch {
+      Alert.alert("오류", "알림 목록을 불러오지 못했습니다.");
+      setStations([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(useCallback(() => { fetchAlerts(); }, [fetchAlerts]));
+
+  const removeAlert = async (statId: string, chgerId: string) => {
+    try {
+      await api.delete(`/charger-alerts/${statId}/${chgerId}`);
+      setStations(prev =>
+        prev
+          .map(s => s.statId !== statId ? s : {
+            ...s,
+            alertedChargers: s.alertedChargers.filter(c => c.chgerId !== chgerId),
+          })
+          .filter(s => s.alertedChargers.length > 0)
+      );
+    } catch {
+      Alert.alert("오류", "알림 해제에 실패했습니다.");
+    }
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={S.container} edges={["top"]}>
+        <View style={S.header}>
+          <TouchableOpacity onPress={() => router.back()} style={S.headerBtn}>
+            <Ionicons name="chevron-back" size={24} color="#111" />
+          </TouchableOpacity>
+          <Text style={S.headerTitle}>충전기 알림 관리</Text>
+          <View style={S.headerBtn} />
+        </View>
+        <View style={S.center}>
+          <ActivityIndicator size="large" color={ACCENT} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={S.container} edges={["top"]}>
@@ -66,51 +107,75 @@ export default function ChargerAlertsScreen() {
         <View style={S.headerBtn} />
       </View>
 
-      <ScrollView contentContainerStyle={S.scroll}>
-        {stations.map(station => (
-          <View key={station.id} style={S.card}>
-            <View style={S.stationTop}>
-              <Text style={S.stationName} numberOfLines={2}>{station.name}</Text>
-              <Text style={S.operator}>{station.operator}</Text>
-            </View>
-            <Text style={S.hours}>{station.hours}</Text>
-            <View style={S.tagRow}>
-              {station.tags.map(t => (
-                <View key={t} style={S.tag}><Text style={S.tagTxt}>{t}</Text></View>
-              ))}
-              <View style={S.facilityTag}><Text style={S.facilityTxt}>{station.facility}</Text></View>
-            </View>
-            <View style={S.divider} />
-            {station.chargers.map((charger, idx) => {
-              const cfg = STATUS_CFG[charger.status];
-              return (
-                <View key={charger.id} style={[S.chargerRow, idx < station.chargers.length - 1 && S.chargerBorder]}>
-                  <View style={[S.statusBadge, { backgroundColor: cfg.bg }]}>
-                    <Text style={[S.statusTxt, { color: cfg.color }]}>{charger.status}</Text>
-                  </View>
-                  <View style={S.specGroup}>
-                    <Text style={S.specLabel}>타입</Text>
-                    <Text style={S.specValue}>{charger.type}</Text>
-                  </View>
-                  <View style={S.specGroup}>
-                    <Text style={S.specLabel}>충전 속도</Text>
-                    <Text style={S.specValue}>{charger.kw}</Text>
-                  </View>
-                  <TouchableOpacity onPress={() => toggleAlert(station.id, charger.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <Ionicons name={charger.alertOn ? "notifications" : "notifications-outline"} size={22} color={charger.alertOn ? "#FFB800" : "#ccc"} />
-                  </TouchableOpacity>
+      {stations.length === 0 ? (
+        <View style={S.empty}>
+          <Ionicons name="notifications-outline" size={48} color="#ddd" />
+          <Text style={S.emptyTxt}>알림 설정된 충전기가 없어요</Text>
+          <Text style={S.emptySubTxt}>충전소 상세 화면에서 알림을 설정할 수 있어요</Text>
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={S.scroll}>
+          {stations.map(station => {
+            const tags = [
+              station.hasFast ? "급속" : "완속",
+              ...(station.parkingFree ? ["무료주차"] : []),
+              station.openToPublic ? "개방" : "비개방",
+            ];
+            return (
+              <View key={station.statId} style={S.card}>
+                <View style={S.stationTop}>
+                  <Text style={S.stationName} numberOfLines={2}>{station.statNm}</Text>
+                  <Text style={S.operator}>{station.busiNm}</Text>
                 </View>
-              );
-            })}
-          </View>
-        ))}
-      </ScrollView>
+                <Text style={S.hours}>{station.useTime}</Text>
+                <View style={S.tagRow}>
+                  {tags.map(t => (
+                    <View key={t} style={S.tag}><Text style={S.tagTxt}>{t}</Text></View>
+                  ))}
+                  {station.kind && (
+                    <View style={S.facilityTag}><Text style={S.facilityTxt}>{station.kind}</Text></View>
+                  )}
+                </View>
+                <View style={S.divider} />
+                {station.alertedChargers.map((charger, idx) => {
+                  const cfg = STAT_CFG[charger.chgerStat] ?? STAT_CFG.UNKNOWN;
+                  return (
+                    <View
+                      key={charger.chgerId}
+                      style={[S.chargerRow, idx < station.alertedChargers.length - 1 && S.chargerBorder]}
+                    >
+                      <View style={[S.statusBadge, { backgroundColor: cfg.bg }]}>
+                        <Text style={[S.statusTxt, { color: cfg.color }]}>{cfg.label}</Text>
+                      </View>
+                      <View style={S.specGroup}>
+                        <Text style={S.specLabel}>타입</Text>
+                        <Text style={S.specValue}>{charger.chgerType}</Text>
+                      </View>
+                      <View style={S.specGroup}>
+                        <Text style={S.specLabel}>출력</Text>
+                        <Text style={S.specValue}>{charger.output ?? "-"}</Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => removeAlert(station.statId, charger.chgerId)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <Ionicons name="notifications" size={22} color="#FFB800" />
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </View>
+            );
+          })}
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
 
 const S = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f5f6fa" },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
   header: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     backgroundColor: "#fff", paddingHorizontal: 4, paddingVertical: 10,
@@ -125,8 +190,8 @@ const S = StyleSheet.create({
   operator: { fontSize: 12, color: "#888", flexShrink: 0 },
   hours: { fontSize: 12, color: "#999", marginBottom: 8 },
   tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 12 },
-  tag: { paddingHorizontal: 9, paddingVertical: 3, backgroundColor: "#EBF3FF", borderRadius: 6 },
-  tagTxt: { fontSize: 11, color: "#5B9CF6", fontWeight: "500" },
+  tag: { paddingHorizontal: 9, paddingVertical: 3, backgroundColor: ACCENT_BG, borderRadius: 6 },
+  tagTxt: { fontSize: 11, color: ACCENT, fontWeight: "500" },
   facilityTag: { paddingHorizontal: 9, paddingVertical: 3, backgroundColor: "#f2f2f2", borderRadius: 6 },
   facilityTxt: { fontSize: 11, color: "#777" },
   divider: { height: 1, backgroundColor: "#f0f0f0", marginBottom: 4 },
@@ -137,4 +202,7 @@ const S = StyleSheet.create({
   specGroup: { flex: 1 },
   specLabel: { fontSize: 10, color: "#aaa", marginBottom: 2 },
   specValue: { fontSize: 12, fontWeight: "600", color: "#333" },
+  empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  emptyTxt: { fontSize: 15, color: "#bbb" },
+  emptySubTxt: { fontSize: 13, color: "#ccc" },
 });

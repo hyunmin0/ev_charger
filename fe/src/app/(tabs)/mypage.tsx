@@ -6,9 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-// USB로 연결해서 adb reverse tcp:8080 tcp:8080으로 포트를 넘겨받는 구성이라 localhost로 접근함
-const BACKEND_URL = "http://localhost:8080";
+import api from "@/lib/api";
 
 const MENU_ITEMS = [
   { label: "내 차량 관리", icon: "car-outline" as const, route: "/car-management" },
@@ -18,35 +16,30 @@ const MENU_ITEMS = [
   { label: "공지사항", icon: "megaphone-outline" as const, route: "/notices" },
 ];
 
+type Profile = {
+  nickname: string;
+  email: string | null;
+  imageUrl: string | null;
+};
+
 export default function MypageScreen() {
   const [token, setToken] = useState<string | null>(null);
-  const [userName, setUserName] = useState("");
-  const [userEmail, setUserEmail] = useState("");
-  const [profileImageUrl, setProfileImageUrl] = useState("");
+  const [profile, setProfile] = useState<Profile | null>(null);
 
-  // 화면 포커스될 때마다 로그인 상태 확인 후, 로그인 상태면 최신 프로필 조회
   useFocusEffect(
     useCallback(() => {
       (async () => {
         const t = await AsyncStorage.getItem("jwt_token");
         setToken(t);
-        if (!t) {
-          setUserName("");
-          setUserEmail("");
-          setProfileImageUrl("");
-          return;
-        }
-        try {
-          const res = await fetch(`${BACKEND_URL}/user/profile`, {
-            headers: { Authorization: `Bearer ${t}` },
-          });
-          if (!res.ok) return;
-          const data = await res.json();
-          setUserName(data.nickname ?? "");
-          setUserEmail(data.email ?? "");
-          setProfileImageUrl(data.imageUrl ?? "");
-        } catch (e) {
-          console.error("프로필 조회 실패", e);
+        if (t) {
+          try {
+            const res = await api.get("/user/profile");
+            setProfile(res.data);
+          } catch {
+            setProfile(null);
+          }
+        } else {
+          setProfile(null);
         }
       })();
     }, [])
@@ -59,41 +52,34 @@ export default function MypageScreen() {
         text: "로그아웃",
         style: "destructive",
         onPress: async () => {
-          const [accessToken, refreshToken] = await AsyncStorage.multiGet(["jwt_token", "refresh_token"])
-            .then(pairs => pairs.map(([, v]) => v));
           try {
+            const accessToken = await AsyncStorage.getItem("jwt_token");
+            const refreshToken = await AsyncStorage.getItem("refresh_token");
             if (accessToken && refreshToken) {
-              await fetch(
-                `${BACKEND_URL}/auth/logout?accessToken=${encodeURIComponent(accessToken)}&refreshToken=${encodeURIComponent(refreshToken)}`,
-                { method: "POST" }
-              );
+              await api.post("/auth/logout", null, {
+                params: { accessToken, refreshToken },
+              });
             }
-          } catch (e) {
-            console.error("로그아웃 요청 실패", e);
+          } catch {
+            // 서버 오류여도 로컬 로그아웃 진행
+          } finally {
+            await AsyncStorage.multiRemove(["jwt_token", "refresh_token", "user_name", "user_email"]);
+            setToken(null);
+            setProfile(null);
           }
-          await AsyncStorage.multiRemove(["jwt_token", "refresh_token"]);
-          setToken(null);
-          setUserName("");
-          setUserEmail("");
-          setProfileImageUrl("");
         },
       },
     ]);
   };
 
-  const handleMenuPress = (route: string) => {
-    router.push(route as any);
-  };
-
   return (
-    <SafeAreaView style={S.container} edges={["top","bottom"]}>
-      {/* 헤더 */}
+    <SafeAreaView style={S.container} edges={["top", "bottom"]}>
       <View style={S.header}>
         <Text style={S.headerTitle}>마이페이지</Text>
         <View style={S.headerIcons}>
           <TouchableOpacity style={S.iconBtn} onPress={() => router.push("/charger-alert-history" as any)}>
-  <Ionicons name="notifications-outline" size={24} color="#333" />
-</TouchableOpacity>
+            <Ionicons name="notifications-outline" size={24} color="#333" />
+          </TouchableOpacity>
           <TouchableOpacity style={S.iconBtn}>
             <Ionicons name="settings-outline" size={24} color="#333" />
           </TouchableOpacity>
@@ -102,28 +88,26 @@ export default function MypageScreen() {
 
       <ScrollView style={S.scroll}>
         {/* 프로필 카드 */}
-        {token ? (
-          // 로그인 상태
+        {token && profile ? (
           <View style={S.profileCard}>
-            <View style={S.profileImage}>
-              {profileImageUrl ? (
-                <Image source={{ uri: profileImageUrl }} style={S.profileImagePic} />
-              ) : (
+            {profile.imageUrl ? (
+              <Image source={{ uri: profile.imageUrl }} style={S.profileImage} />
+            ) : (
+              <View style={[S.profileImage, S.profileImageFallback]}>
                 <Ionicons name="person" size={34} color="#5B9CF6" />
-              )}
-            </View>
+              </View>
+            )}
             <View style={S.profileInfo}>
-              <Text style={S.profileName}>{userName || "사용자"}</Text>
-              <Text style={S.profileEmail}>{userEmail || ""}</Text>
+              <Text style={S.profileName}>{profile.nickname || "사용자"}</Text>
+              <Text style={S.profileEmail}>{profile.email || ""}</Text>
             </View>
             <TouchableOpacity onPress={() => router.push("/login" as any)}>
               <Ionicons name="create-outline" size={20} color="#aaa" />
             </TouchableOpacity>
           </View>
         ) : (
-          // 비로그인 상태
           <TouchableOpacity style={S.profileCard} onPress={() => router.push("/login" as any)}>
-            <View style={S.profileImage}>
+            <View style={[S.profileImage, S.profileImageFallback]}>
               <Ionicons name="person-outline" size={34} color="#999" />
             </View>
             <View style={S.profileInfo}>
@@ -140,7 +124,7 @@ export default function MypageScreen() {
             <TouchableOpacity
               key={item.label}
               style={[S.menuItem, index < MENU_ITEMS.length - 1 && S.menuBorder]}
-              onPress={() => handleMenuPress(item.route)}
+              onPress={() => router.push(item.route as any)}
             >
               <View style={S.menuLeft}>
                 <Ionicons name={item.icon} size={20} color="#555" style={S.menuIcon} />
@@ -151,7 +135,6 @@ export default function MypageScreen() {
           ))}
         </View>
 
-        {/* 로그아웃 (로그인 시만 표시) */}
         {token && (
           <View style={S.card}>
             <TouchableOpacity style={S.menuItem} onPress={handleLogout}>
@@ -182,12 +165,8 @@ const S = StyleSheet.create({
     flexDirection: "row", alignItems: "center", backgroundColor: "#fff",
     borderRadius: 12, marginBottom: 12, paddingHorizontal: 16, paddingVertical: 16,
   },
-  profileImage: {
-    width: 52, height: 52, borderRadius: 26,
-    backgroundColor: "#EBF3FF", alignItems: "center", justifyContent: "center",
-    overflow: "hidden",
-  },
-  profileImagePic: { width: 52, height: 52 },
+  profileImage: { width: 52, height: 52, borderRadius: 26 },
+  profileImageFallback: { backgroundColor: "#EBF3FF", alignItems: "center", justifyContent: "center" },
   profileInfo: { flex: 1, marginLeft: 14 },
   profileName: { fontSize: 16, fontWeight: "700", color: "#111" },
   profileEmail: { fontSize: 13, color: "#888", marginTop: 2 },

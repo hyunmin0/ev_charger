@@ -1,98 +1,137 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from "react-native";
+import React, { useState, useCallback } from "react";
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
+import * as Location from "expo-location";
+import api from "@/lib/api";
 
 const ACCENT = "#5B9CF6";
 const ACCENT_BG = "#EBF3FF";
 
-const MOCK_FAVORITES = [
-  {
-    id: "1",
-    name: "제일풍경채센트럴파크1단지입주자대표회의(SP)",
-    operator: "파워큐브",
-    hours: "24시간 이용가능",
-    facility: "공동주택시설",
-    tags: ["비개방"],
-    available: 0,
-    total: 3,
-    rating: 2.2,
-    reviewCount: 7,
-    status: "unavailable",
-  },
-  {
-    id: "2",
-    name: "한국도로교통공단 광주전남지부",
-    operator: "채비",
-    hours: "평일 09:00~18:00 / 주말·공휴일 미개방",
-    facility: "공공시설",
-    tags: ["무료 주차", "개방"],
-    available: 1,
-    total: 2,
-    rating: 4.1,
-    reviewCount: 12,
-    status: "available",
-  },
-  {
-    id: "3",
-    name: "광주광역시 북구 전남대학교공과대학",
-    operator: "GS차지비",
-    hours: "24시간 이용가능",
-    facility: "교육문화시설",
-    tags: ["무료 주차", "개방"],
-    available: 3,
-    total: 5,
-    rating: 3.8,
-    reviewCount: 23,
-    status: "available",
-  },
-];
-
-const statusConfig = {
-  available: { label: "이용 가능", color: "#4CAF50", bg: "#F0FBF0" },
-  unavailable: { label: "사용불가", color: "#F44336", bg: "#FFF0F0" },
+type Station = {
+  statId: string;
+  statNm: string;
+  addr: string;
+  useTime: string;
+  parkingFree: boolean;
+  openToPublic: boolean;
+  kind: string;
+  busiNm: string;
+  totalCount: number;
+  availableCount: number;
+  allUnavailable: boolean;
+  allUnknown: boolean;
+  averageRating: number | null;
+  reviewCount: number;
 };
+
+function getStatus(s: Station) {
+  if (s.availableCount > 0) return { label: "이용 가능", color: "#4CAF50", bg: "#F0FBF0" };
+  if (s.allUnavailable) return { label: "사용불가", color: "#F44336", bg: "#FFF0F0" };
+  if (s.allUnknown) return { label: "상태불명", color: "#aaa", bg: "#f5f5f5" };
+  return { label: "충전 중", color: "#FF9800", bg: "#FFF8F0" };
+}
+
+function getTags(s: Station) {
+  const tags: string[] = [];
+  if (s.parkingFree) tags.push("무료 주차");
+  tags.push(s.openToPublic ? "개방" : "비개방");
+  return tags;
+}
 
 export default function FavoritesScreen() {
   const router = useRouter();
-  const [favorites, setFavorites] = useState(MOCK_FAVORITES.map(s => s.id));
+  const [stations, setStations] = useState<Station[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const toggleFavorite = (id: string) => {
-    setFavorites(prev => prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]);
+  const fetchFavorites = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      let lat = 35.1595, lng = 126.8526; // 광주 기본값
+      if (status === "granted") {
+        const loc = await Location.getCurrentPositionAsync({});
+        lat = loc.coords.latitude;
+        lng = loc.coords.longitude;
+      }
+      const res = await api.get("/favorites", { params: { lat, lng } });
+      setStations(res.data ?? []);
+    } catch {
+      setStations([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchFavorites();
+    }, [fetchFavorites])
+  );
+
+  const removeFavorite = async (statId: string) => {
+    Alert.alert("즐겨찾기 해제", "즐겨찾기에서 제거할까요?", [
+      { text: "취소", style: "cancel" },
+      {
+        text: "해제",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await api.delete(`/favorites/${statId}`);
+            setStations(prev => prev.filter(s => s.statId !== statId));
+          } catch {
+            Alert.alert("오류", "다시 시도해주세요.");
+          }
+        },
+      },
+    ]);
   };
 
-  const renderItem = ({ item }: { item: typeof MOCK_FAVORITES[0] }) => {
-    const st = statusConfig[item.status as keyof typeof statusConfig];
-    const isFav = favorites.includes(item.id);
+  const renderItem = ({ item }: { item: Station }) => {
+    const st = getStatus(item);
+    const tags = getTags(item);
     return (
-      <TouchableOpacity style={S.card} onPress={() => router.push(`/station/${item.id}` as any)} activeOpacity={0.85}>
+      <TouchableOpacity
+        style={S.card}
+        onPress={() => router.push(`/station/${item.statId}` as any)}
+        activeOpacity={0.85}
+      >
         <View style={S.cardTop}>
-          <Text style={S.cardName} numberOfLines={2}>{item.name}</Text>
-          <Text style={S.operator}>{item.operator}</Text>
+          <Text style={S.cardName} numberOfLines={2}>{item.statNm}</Text>
+          <Text style={S.operator}>{item.busiNm}</Text>
         </View>
-        <Text style={S.hours}>{item.hours}</Text>
-        <View style={S.ratingRow}>
-          <Ionicons name="star" size={13} color="#FFB800" />
-          <Text style={S.ratingNum}>{item.rating}</Text>
-          <Text style={S.reviewCount}>({item.reviewCount})</Text>
-        </View>
+        <Text style={S.hours}>{item.useTime}</Text>
+        {item.averageRating != null && (
+          <View style={S.ratingRow}>
+            <Ionicons name="star" size={13} color="#FFB800" />
+            <Text style={S.ratingNum}>{item.averageRating.toFixed(1)}</Text>
+            <Text style={S.reviewCount}>({item.reviewCount})</Text>
+          </View>
+        )}
         <View style={S.tagRow}>
-          {item.tags.map(t => (
+          {tags.map(t => (
             <View key={t} style={S.tag}><Text style={S.tagTxt}>{t}</Text></View>
           ))}
-          <View style={S.facilityTag}><Text style={S.facilityTxt}>{item.facility}</Text></View>
+          <View style={S.facilityTag}><Text style={S.facilityTxt}>{item.kind}</Text></View>
         </View>
         <View style={S.cardBottom}>
           <Text style={S.chargerCount}>
-            충전기 <Text style={{ color: item.available > 0 ? ACCENT : "#aaa", fontWeight: "700" }}>{item.available}</Text> / {item.total}
+            충전기{" "}
+            <Text style={{ color: item.availableCount > 0 ? ACCENT : "#aaa", fontWeight: "700" }}>
+              {item.availableCount}
+            </Text>{" "}
+            / {item.totalCount}
           </Text>
           <View style={S.rightRow}>
             <View style={[S.statusBadge, { backgroundColor: st.bg }]}>
               <Text style={[S.statusTxt, { color: st.color }]}>{st.label}</Text>
             </View>
-            <TouchableOpacity onPress={() => toggleFavorite(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name={isFav ? "star" : "star-outline"} size={18} color={isFav ? "#FFB800" : "#ccc"} />
+            <TouchableOpacity
+              onPress={() => removeFavorite(item.statId)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="star" size={18} color="#FFB800" />
             </TouchableOpacity>
           </View>
         </View>
@@ -109,19 +148,26 @@ export default function FavoritesScreen() {
         <Text style={S.headerTitle}>즐겨찾기 충전소</Text>
         <View style={S.headerBtn} />
       </View>
-      <FlatList
-        data={MOCK_FAVORITES}
-        keyExtractor={item => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={S.listContent}
-        ItemSeparatorComponent={() => <View style={S.separator} />}
-        ListEmptyComponent={
-          <View style={S.empty}>
-            <Ionicons name="star-outline" size={48} color="#ddd" />
-            <Text style={S.emptyTxt}>즐겨찾기한 충전소가 없어요</Text>
-          </View>
-        }
-      />
+
+      {loading ? (
+        <View style={S.center}>
+          <ActivityIndicator size="large" color={ACCENT} />
+        </View>
+      ) : (
+        <FlatList
+          data={stations}
+          keyExtractor={item => item.statId}
+          renderItem={renderItem}
+          contentContainerStyle={S.listContent}
+          ItemSeparatorComponent={() => <View style={S.separator} />}
+          ListEmptyComponent={
+            <View style={S.empty}>
+              <Ionicons name="star-outline" size={48} color="#ddd" />
+              <Text style={S.emptyTxt}>즐겨찾기한 충전소가 없어요</Text>
+            </View>
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -158,6 +204,7 @@ const S = StyleSheet.create({
   rightRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   statusTxt: { fontSize: 12, fontWeight: "600" },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
   empty: { alignItems: "center", paddingTop: 80, gap: 12 },
   emptyTxt: { fontSize: 15, color: "#bbb" },
 });
