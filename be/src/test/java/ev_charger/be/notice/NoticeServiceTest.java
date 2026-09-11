@@ -171,6 +171,54 @@ class NoticeServiceTest {
         assertThat(responses.getContent().get(1).isRead()).isFalse();
     }
 
+    @Test
+    void 비로그인_공지_단일_조회시_읽음기록을_남기지_않는다() {
+        // given
+        long noticeId = 1L;
+
+        Notice notice = mock(Notice.class);
+        given(notice.getNoticeId()).willReturn(noticeId);
+        given(notice.getTitle()).willReturn("점검 안내");
+
+        given(noticeRepository.findById(noticeId)).willReturn(Optional.of(notice));
+
+        // when
+        NoticeResponse response = noticeService.getNotice(null, noticeId);
+
+        // then
+        assertThat(response.id()).isEqualTo(noticeId);
+        assertThat(response.title()).isEqualTo("점검 안내");
+
+        verify(notificationHistoryService, never()).save(any(), any());
+    }
+
+    @Test
+    void 비로그인_공지_목록_조회시_모두_안읽음으로_반영된다() {
+        // given
+        Pageable pageable = PageRequest.of(0, 10);
+
+        Notice notice1 = mock(Notice.class);
+        given(notice1.getNoticeId()).willReturn(1L);
+
+        Notice notice2 = mock(Notice.class);
+        given(notice2.getNoticeId()).willReturn(2L);
+
+        Page<Notice> notices = new PageImpl<>(List.of(notice1, notice2), pageable, 2);
+        given(noticeRepository.findAll(pageable)).willReturn(notices);
+
+        // when
+        Page<NoticeListResponse> responses = noticeService.getNotices(null, pageable);
+
+        // then
+        assertThat(responses.getContent()).hasSize(2);
+        assertThat(responses.getContent().get(0).id()).isEqualTo(1L);
+        assertThat(responses.getContent().get(0).isRead()).isFalse();
+        assertThat(responses.getContent().get(1).id()).isEqualTo(2L);
+        assertThat(responses.getContent().get(1).isRead()).isFalse();
+
+        verify(notificationHistoryRepository, never()).findByUserAndNoticeIn(any(), any());
+    }
+
     @AfterEach
     void tearDown(TestInfo testInfo) {
         System.out.println(testInfo.getDisplayName() + " 경과 시간: " + (System.currentTimeMillis() - startTime) + "ms");
