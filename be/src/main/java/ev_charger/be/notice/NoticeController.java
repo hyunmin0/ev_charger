@@ -39,9 +39,10 @@ public class NoticeController {
      */
     @GetMapping("{noticeId}")
     public ResponseEntity<NoticeResponse> getNotice(
-            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @AuthenticationPrincipal CustomUserDetails userDetails, // 비로그인 시 null
             @PathVariable("noticeId") Long noticeId) {
-        return ResponseEntity.ok(noticeService.getNotice(userDetails.getUser(), noticeId));
+        return ResponseEntity.ok(noticeService.getNotice(
+                userDetails != null ? userDetails.getUser() : null, noticeId));
     }
 
     /**
@@ -52,9 +53,10 @@ public class NoticeController {
      */
     @GetMapping("")
     public ResponseEntity<Page<NoticeListResponse>> getAllNotices(
-            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @AuthenticationPrincipal CustomUserDetails userDetails, // 비로그인 시 null
             @PageableDefault(sort="createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
-        return ResponseEntity.ok(noticeService.getNotices(userDetails.getUser(), pageable));
+        return ResponseEntity.ok(noticeService.getNotices(
+                userDetails != null ? userDetails.getUser() : null, pageable));
     }
 }

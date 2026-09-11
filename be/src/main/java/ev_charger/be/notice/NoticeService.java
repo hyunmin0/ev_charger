@@ -7,6 +7,7 @@ import ev_charger.be.notification.NotificationHistory;
 import ev_charger.be.notification.NotificationHistoryRepository;
 import ev_charger.be.notification.NotificationHistoryService;
 import ev_charger.be.user.User;
+import jakarta.annotation.Nullable;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -41,17 +42,20 @@ public class NoticeService {
 
     // 공지 단일 조회
     @Transactional
-    public NoticeResponse getNotice(User user, long id) {
+    public NoticeResponse getNotice(@Nullable User user, long id) {
         Notice notice = noticeRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("유효하지 않은 공지입니다."));
 
-        notificationHistoryService.save(user, notice);
+        // 비로그인 시 읽음 기록을 남기지 않음
+        if (user != null) {
+            notificationHistoryService.save(user, notice);
+        }
 
         return new NoticeResponse(notice.getNoticeId(), notice.getTitle(), notice.getContent(), notice.getCreatedAt());
     }
 
     // 공지 목록 조회
-    public Page<NoticeListResponse> getNotices(User user, Pageable pageable) {
+    public Page<NoticeListResponse> getNotices(@Nullable User user, Pageable pageable) {
         // pageable에 해당하는 notices
         Page<Notice>  notices = noticeRepository.findAll(pageable);
 
@@ -60,8 +64,11 @@ public class NoticeService {
         // notice가 동일한 id라도 다른 인스턴스면 false가 나올 수 있기에 id를 비교
             // e.g. notices: findAll로 직접 조회한 실제 엔티티
             //      notificationHistory의 notice: 지연로딩되므로 Hibernate 프록시일 가능성 높음(fetch.lazy)
-        Set<Long> readIds = notificationHistoryRepository.findByUserAndNoticeIn(user, notices.getContent())
-                .stream().map(h -> h.getNotice().getNoticeId()).collect(Collectors.toSet());
+        // 비로그인 시 읽은 공지 없음 (전부 isRead = false)
+        Set<Long> readIds = user != null
+                ? notificationHistoryRepository.findByUserAndNoticeIn(user, notices.getContent())
+                        .stream().map(h -> h.getNotice().getNoticeId()).collect(Collectors.toSet())
+                : Set.of();
 
         // isRead: readIds에 해당 notice id가 있는지
         return notices.map(n -> NoticeListResponse.from(n, readIds.contains(n.getNoticeId())));
