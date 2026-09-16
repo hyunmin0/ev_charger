@@ -60,4 +60,13 @@ public class AuthController {
             @RequestParam String code) {
         return ResponseEntity.ok(authService.kakaoCodeLogin(code));
     }
+
+    // 구글 인가코드로 로그인
+    // input : code(String) - 구글 인가코드
+    // output: SocialLoginResponse { status, jwtAccessToken, jwtRefreshToken, tempToken }
+    @PostMapping("/google/token")
+    public ResponseEntity<SocialLoginResponse> googleCodeLogin(
+            @RequestParam String code) {
+        return ResponseEntity.ok(authService.googleCodeLogin(code));
+    }
 }

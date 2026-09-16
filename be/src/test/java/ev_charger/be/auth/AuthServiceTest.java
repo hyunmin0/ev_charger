@@ -1,5 +1,6 @@
 package ev_charger.be.auth;
 
+import com.sun.net.httpserver.HttpServer;
 import ev_charger.be.auth.client.OAuthApiClient;
 import ev_charger.be.auth.dto.request.RegisterRequest;
 import ev_charger.be.auth.dto.response.ReissueResponse;
@@ -22,8 +23,11 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.ObjectMapper;
 
+import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -33,6 +37,7 @@ import static org.assertj.core.api.AssertionsForClassTypes.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 // 선언하면 테스트에 필요한 가짜 객체들을 자동으로 세팅
@@ -123,6 +128,78 @@ public class AuthServiceTest {
         assertThat(response.accessToken()).isNull();
         assertThat(response.refreshToken()).isNull();
         assertThat(response.tempToken()).isNotNull();
+    }
+
+    @Test
+    void 지원하지_않는_provider면_예외_발생() {
+        // given
+        given(oAuthApiClient.getProvider()).willReturn(Provider.GOOGLE);
+
+        // when & then
+        assertThatThrownBy(() -> authService.socialLogin("accessToken", Provider.KAKAO))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("지원하지 않는 provider");
+
+        verify(oAuthApiClient, never()).getUserInfo(any());
+    }
+
+    @Test
+    void 소셜_토큰이_유효하지_않으면_예외_발생() {
+        // given
+        Provider provider = Provider.GOOGLE;
+        String invalidAccessToken = "invalid-access-token";
+
+        given(oAuthApiClient.getProvider()).willReturn(provider);
+        given(oAuthApiClient.getUserInfo(invalidAccessToken))
+                .willThrow(new IllegalArgumentException("유효하지 않은 소셜 토큰"));
+
+        // when & then
+        assertThatThrownBy(() -> authService.socialLogin(invalidAccessToken, provider))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("유효하지 않은 소셜 토큰");
+
+        verify(userRepository, never()).findByProviderAndProviderId(any(), any());
+        verify(jwtProvider, never()).generateAccessToken(any());
+    }
+
+    @Test
+    void 카카오_인가코드가_유효하지_않으면_예외_발생() throws IOException {
+        // given
+        // 만료/재사용된 인가 코드면 카카오 토큰 서버가 400(invalid_grant) 응답
+        HttpServer server = startTokenServer(400);
+        ReflectionTestUtils.setField(authService, "kakaoTokenUrl",
+                "http://localhost:" + server.getAddress().getPort() + "/");
+
+        // when & then
+        try {
+            assertThatThrownBy(() -> authService.kakaoCodeLogin("invalid-code"))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("유효하지 않은 인가 코드");
+
+            verify(oAuthApiClient, never()).getUserInfo(any());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void 구글_인가코드가_유효하지_않으면_예외_발생() throws IOException {
+        // given
+        // 만료/재사용된 인가 코드면 구글 토큰 서버가 400(invalid_grant) 응답
+        HttpServer server = startTokenServer(400);
+        ReflectionTestUtils.setField(authService, "googleTokenUrl",
+                "http://localhost:" + server.getAddress().getPort() + "/");
+
+        // when & then
+        try {
+            assertThatThrownBy(() -> authService.googleCodeLogin("invalid-code"))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("유효하지 않은 인가 코드");
+
+            verify(oAuthApiClient, never()).getUserInfo(any());
+        } finally {
+            server.stop(0);
+        }
     }
 
     @Test
@@ -342,6 +419,17 @@ public class AuthServiceTest {
         assertThatThrownBy(() -> authService.reissue(refreshToken))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("유효하지 않은 refresh token");
+    }
+
+    // 카카오/구글 토큰 서버 흉내: 지정된 상태 코드로 body 없이 응답
+    private HttpServer startTokenServer(int status) throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/", exchange -> {
+            exchange.sendResponseHeaders(status, -1);
+            exchange.close();
+        });
+        server.start();
+        return server;
     }
 
     @AfterEach

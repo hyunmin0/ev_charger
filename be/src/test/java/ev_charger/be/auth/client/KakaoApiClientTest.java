@@ -106,6 +106,22 @@ class KakaoApiClientTest {
     }
 
     @Test
+    void 토큰이_유효하지_않아_401_응답이면_IllegalArgumentException_발생() throws IOException {
+        // 만료/위조된 토큰이면 소셜 서버가 401 응답 -> 400으로 응답하도록 IllegalArgumentException으로 변환
+        server.createContext("/", exchange -> {
+            exchange.sendResponseHeaders(401, -1);
+            exchange.close();
+        });
+        server.start();
+        ReflectionTestUtils.setField(kakaoApiClient, "apiUrl",
+                "http://localhost:" + server.getAddress().getPort() + "/");
+
+        assertThatThrownBy(() -> kakaoApiClient.getUserInfo("invalid-token"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("유효하지 않은 소셜 토큰");
+    }
+
+    @Test
     void 서버_에러_응답이면_예외_전파() throws IOException {
         server.createContext("/", exchange -> {
             exchange.sendResponseHeaders(500, -1);

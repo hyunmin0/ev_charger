@@ -9,6 +9,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
@@ -35,10 +36,16 @@ public class GoogleApiClient implements OAuthApiClient{
         HttpEntity<Void> request = new HttpEntity<>(headers);
 
         // map을 쓰는 이유: json 응답을 키-값으로 쉽게 접근하기 위해
-        ResponseEntity<Map<String,Object>> response = restTemplate.exchange( // 서버에 get 요청 보내기 map 형태로 받음
-                apiUrl, HttpMethod.GET, request,
-                // ParameterizedTypeReference를 사용하여 Map의 타입을 명시
-                new ParameterizedTypeReference<Map<String,Object>>() {});
+        ResponseEntity<Map<String,Object>> response;
+        try {
+            response = restTemplate.exchange( // 서버에 get 요청 보내기 map 형태로 받음
+                    apiUrl, HttpMethod.GET, request,
+                    // ParameterizedTypeReference를 사용하여 Map의 타입을 명시
+                    new ParameterizedTypeReference<Map<String,Object>>() {});
+        } catch (HttpClientErrorException e) {
+            // 4xx: 만료/위조된 토큰 등 클라이언트 요청 문제 -> 400으로 응답
+            throw new IllegalArgumentException("유효하지 않은 소셜 토큰");
+        }
 
         Map<String, Object> body = response.getBody();
         String id = body.get("sub").toString();

@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import tools.jackson.databind.ObjectMapper;
 
@@ -49,6 +50,18 @@ public class AuthService {
     @Value("${kakao.redirect-uri:http://localhost/}") // 기본값: http://localhost/
     private String kakaoRedirectUri;
 
+    @Value("${kakao.token-url:https://kauth.kakao.com/oauth/token}") // application.yml의 kakao.token-url
+    private String kakaoTokenUrl;
+
+    @Value("${google.token-url}")
+    private String googleTokenUrl;
+
+    @Value("${google.client-id}")
+    private String googleClientId;
+
+    @Value("${google.redirect-uri}")
+    private String googleRedirectUri;
+
     /**
      * 카카오 인가코드로 로그인 (WebView에서 받은 code → 카카오 서버에서 액세스 토큰 교환 → 로그인)
      * @param code 카카오 인가코드
@@ -70,15 +83,52 @@ public class AuthService {
         HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(params, headers);
 
         // 카카오 서버에서 액세스 토큰 받아오기
-        ResponseEntity<Map<String, Object>> tokenResponse = restTemplate.exchange(
-                "https://kauth.kakao.com/oauth/token",
-                HttpMethod.POST, request,
-                new ParameterizedTypeReference<Map<String, Object>>() {});
+        ResponseEntity<Map<String, Object>> tokenResponse;
+        try {
+            tokenResponse = restTemplate.exchange(
+                    kakaoTokenUrl,
+                    HttpMethod.POST, request,
+                    new ParameterizedTypeReference<Map<String, Object>>() {});
+        } catch (HttpClientErrorException e) {
+            // 4xx: 만료/재사용/위조된 인가 코드 등 클라이언트 요청 문제 -> 400으로 응답
+            throw new IllegalArgumentException("유효하지 않은 인가 코드");
+        }
 
         String accessToken = (String) tokenResponse.getBody().get("access_token");
 
         // 기존 로그인 로직 재사용
         return socialLogin(accessToken, Provider.KAKAO);
+    }
+
+    /**
+     * 구글 인가 코드로 로그인 (프론트에서 code만 보내면 백엔드가 토큰 교환)
+     * Android 타입 OAuth 클라이언트라 client_secret 없이 교환
+     * @param code 구글 인가 코드
+     */
+    @Transactional
+    public SocialLoginResponse googleCodeLogin(String code) {
+        RestTemplate restTemplate = new RestTemplate();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
+        body.add("grant_type", "authorization_code");
+        body.add("client_id", googleClientId);
+        body.add("redirect_uri", googleRedirectUri);
+        body.add("code", code);
+
+        Map<String, Object> tokenResponse;
+        try {
+            tokenResponse = restTemplate.postForObject(
+                    googleTokenUrl, new HttpEntity<>(body, headers), Map.class);
+        } catch (HttpClientErrorException e) {
+            // 4xx: 만료/재사용/위조된 인가 코드 등 클라이언트 요청 문제 -> 400으로 응답
+            throw new IllegalArgumentException("유효하지 않은 인가 코드");
+        }
+
+        String accessToken = (String) tokenResponse.get("access_token");
+
+        return socialLogin(accessToken, Provider.GOOGLE);
     }
 
     /**
