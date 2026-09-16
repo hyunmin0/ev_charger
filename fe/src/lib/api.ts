@@ -54,14 +54,14 @@ api.interceptors.response.use(
           null,
           { params: { refreshToken } }
         );
-        const { jwtAccessToken, jwtRefreshToken } = res.data;
+        const { newAccessToken, newRefreshToken } = res.data; // ReissueResponse 필드명
         await AsyncStorage.multiSet([
-          ["jwt_token", jwtAccessToken],
-          ["refresh_token", jwtRefreshToken ?? ""],
+          ["jwt_token", newAccessToken],
+          ["refresh_token", newRefreshToken ?? ""],
         ]);
-        refreshQueue.forEach((cb) => cb(jwtAccessToken));
+        refreshQueue.forEach((cb) => cb(newAccessToken));
         refreshQueue = [];
-        original.headers.Authorization = `Bearer ${jwtAccessToken}`;
+        original.headers.Authorization = `Bearer ${newAccessToken}`;
         return api(original);
       } catch {
         await AsyncStorage.multiRemove(["jwt_token", "refresh_token"]);

@@ -95,7 +95,7 @@ export default function CalculatorScreen() {
 
   useEffect(() => {
     // 로그인된 경우 내 차 목록을 상단에 추가
-    api.get<{ userCarId: number; carName: string; batteryCapacity: number }[]>("/user/cars")
+    api.get<{ userCarId: String; carName: string; batteryCapacity: number }[]>("/user/cars")
       .then(res => {
         if (res.data.length > 0) {
           const myCars: CarOption[] = res.data.map(c => ({
