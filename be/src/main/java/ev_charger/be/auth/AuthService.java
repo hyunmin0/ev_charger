@@ -15,20 +15,12 @@ import ev_charger.be.user.UserRepository;
 import ev_charger.be.user.profileImage.ProfileImage;
 import ev_charger.be.user.profileImage.ProfileImageRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
-import org.springframework.web.client.RestTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -44,75 +36,6 @@ public class AuthService {
     private final ProfileImageRepository profileImageRepository;
     private final ObjectMapper objectMapper;
 
-    @Value("${kakao.token-url}")
-    private String kakaoTokenUrl;
-
-    @Value("${kakao.rest-api-key}")
-    private String kakaoRestApiKey;
-
-    @Value("${kakao.redirect-uri}")
-    private String kakaoRedirectUri;
-
-    @Value("${google.token-url}")
-    private String googleTokenUrl;
-
-    @Value("${google.client-id}")
-    private String googleClientId;
-
-    @Value("${google.redirect-uri}")
-    private String googleRedirectUri;
-
-
-    /**
-     * 카카오 인가 코드로 로그인 (프론트에서 code만 보내면 백엔드가 토큰 교환)
-     * @param code 카카오 인가 코드
-     */
-    @Transactional
-    public SocialLoginResponse kakaoCodeLogin(String code) {
-        // 1) 카카오에 code → access token 교환
-        RestTemplate restTemplate = new RestTemplate();
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-
-        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-        body.add("grant_type", "authorization_code");
-        body.add("client_id", kakaoRestApiKey);
-        body.add("redirect_uri", kakaoRedirectUri);
-        body.add("code", code);
-
-        Map<String, Object> tokenResponse = restTemplate.postForObject(
-                kakaoTokenUrl, new HttpEntity<>(body, headers), Map.class);
-
-        String accessToken = (String) tokenResponse.get("access_token");
-
-        // 2) 기존 로그인 로직 재사용
-        return socialLogin(accessToken, Provider.KAKAO);
-    }
-
-    /**
-     * 구글 인가 코드로 로그인 (프론트에서 code만 보내면 백엔드가 토큰 교환)
-     * Android 타입 OAuth 클라이언트라 client_secret 없이 교환
-     * @param code 구글 인가 코드
-     */
-    @Transactional
-    public SocialLoginResponse googleCodeLogin(String code) {
-        RestTemplate restTemplate = new RestTemplate();
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-
-        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-        body.add("grant_type", "authorization_code");
-        body.add("client_id", googleClientId);
-        body.add("redirect_uri", googleRedirectUri);
-        body.add("code", code);
-
-        Map<String, Object> tokenResponse = restTemplate.postForObject(
-                googleTokenUrl, new HttpEntity<>(body, headers), Map.class);
-
-        String accessToken = (String) tokenResponse.get("access_token");
-
-        return socialLogin(accessToken, Provider.GOOGLE);
-    }
 
     /**
      * 회원가입 및 로그인
@@ -251,6 +174,8 @@ public class AuthService {
                             remaining,
                             TimeUnit.MILLISECONDS);
         }
+
+
     }
 
     /**

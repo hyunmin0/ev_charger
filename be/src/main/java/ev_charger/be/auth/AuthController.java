@@ -3,11 +3,14 @@ package ev_charger.be.auth;
 import ev_charger.be.auth.dto.request.RegisterRequest;
 import ev_charger.be.auth.dto.response.ReissueResponse;
 import ev_charger.be.auth.dto.response.SocialLoginResponse;
-
 import ev_charger.be.user.enums.Provider;
+import ev_charger.be.user.profileImage.ProfileImageService;
+import ev_charger.be.user.profileImage.dto.response.ProfileImageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 
 @RestController
@@ -15,7 +18,8 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 
 public class AuthController {
-    private final AuthService authService;//실제 로직은 service에서 처리 controller는 요청만 받아서 넘겨줌
+    private final AuthService authService; //실제 로직은 service에서 처리 controller는 요청만 받아서 넘겨줌
+    private final ProfileImageService profileImageService;
     //input: accessToken(String), provider(Provider)
     //output: SocialLoginResponse{ status, jwtAccessToken, jwtRefreshToken, tempToken }
     @PostMapping("/login") //POST /auth/login으로 요청이 오면 실행
@@ -40,7 +44,7 @@ public class AuthController {
     public ResponseEntity<Void> logout(
             @RequestParam String accessToken,
             @RequestParam String refreshToken) {
-            authService.logout(accessToken, refreshToken);
+        authService.logout(accessToken, refreshToken);
         return ResponseEntity.ok().build();
     }
     //토큰 재발급
@@ -51,15 +55,12 @@ public class AuthController {
             @RequestParam String refreshToken) {
         return ResponseEntity.ok(authService.reissue(refreshToken));
     }
-    @PostMapping("/login/kakao/code")
-    public ResponseEntity<SocialLoginResponse> kakaoCodeLogin(
-            @RequestParam String code) {
-        return ResponseEntity.ok(authService.kakaoCodeLogin(code));
-    }
 
-    @PostMapping("/google/token")
-    public ResponseEntity<SocialLoginResponse> googleCodeLogin(
-            @RequestParam String code) {
-        return ResponseEntity.ok(authService.googleCodeLogin(code));
+    // 프로필 이미지 목록 조회 (회원가입 시 사용, 비로그인 접근 가능)
+    // input : 없음
+    // output: List<ProfileImageResponse> { id, imageUrl, name }
+    @GetMapping("/profile-images")
+    public ResponseEntity<List<ProfileImageResponse>> getProfileImages() {
+        return ResponseEntity.ok(profileImageService.getProfileImageList());
     }
 }

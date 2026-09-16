@@ -5,8 +5,6 @@ import ev_charger.be.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
-import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -21,7 +19,6 @@ import java.util.List;
 
 @Configuration // configuration 등록
 @EnableWebSecurity // spring security 활성화
-@EnableMethodSecurity // @PreAuthorize 등 메서드 단위 권한 검사 활성화
 @RequiredArgsConstructor // final 생성자 자동 생성
 public class SecurityConfig {
 
@@ -35,7 +32,7 @@ public class SecurityConfig {
                 // 요청별 권한 설정
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/","/auth/**", "/reviews/station/**", "/stations/**", "/internal/**", "/cars/**", "/profile-images/**").permitAll() // 해당 요청이 오면 접근 허용
-                        .requestMatchers(HttpMethod.GET, "/notices/**").permitAll() // 공지 조회는 비로그인 허용 (등록은 인증 필요)
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/notices/**").permitAll() // 공지 조회는 비로그인 허용 (등록은 인증 필요)
                         .anyRequest().authenticated() // 다른 요청의 경우 인증 필요 (없는 경우: 접근 제한 페이지를 보여줌)
                 )
                 // 세션 사용 안함  (jwt: stateless)

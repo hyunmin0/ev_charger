@@ -9,7 +9,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 import api from "@/lib/api";
 
 type UserCar = {
-  userCarId: number;
+  userCarId: string; // UUID
   carName: string;
   batteryCapacity: number;
 };
@@ -97,7 +97,7 @@ export default function CarManagementScreen() {
     }
   };
 
-  const handleDelete = (userCarId: number, carName: string) => {
+  const handleDelete = (userCarId: string, carName: string) => {
     Alert.alert("차량 삭제", `${carName}을(를) 삭제할까요?`, [
       { text: "취소", style: "cancel" },
       {
@@ -139,7 +139,7 @@ export default function CarManagementScreen() {
       ) : (
         <FlatList
           data={cars}
-          keyExtractor={item => String(item.userCarId)}
+          keyExtractor={item => item.userCarId}
           contentContainerStyle={S.scroll}
           renderItem={({ item }) => (
             <View style={S.card}>
