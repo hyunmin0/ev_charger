@@ -24,7 +24,7 @@ export default function RegisterScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await api.get<ProfileImage[]>("/auth/profile-images");
+        const res = await api.get<ProfileImage[]>("/profile-images");
         setImages(res.data);
         if (res.data.length > 0) setSelectedImageId(res.data[0].id);
       } catch (e) {

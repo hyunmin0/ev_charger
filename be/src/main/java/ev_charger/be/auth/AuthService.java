@@ -15,12 +15,19 @@ import ev_charger.be.user.UserRepository;
 import ev_charger.be.user.profileImage.ProfileImage;
 import ev_charger.be.user.profileImage.ProfileImageRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.RestTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -36,6 +43,43 @@ public class AuthService {
     private final ProfileImageRepository profileImageRepository;
     private final ObjectMapper objectMapper;
 
+    @Value("${kakao.rest-key}") // application.yml의 kakao.rest-key
+    private String kakaoRestKey;
+
+    @Value("${kakao.redirect-uri:http://localhost/}") // 기본값: http://localhost/
+    private String kakaoRedirectUri;
+
+    /**
+     * 카카오 인가코드로 로그인 (WebView에서 받은 code → 카카오 서버에서 액세스 토큰 교환 → 로그인)
+     * @param code 카카오 인가코드
+     */
+    @Transactional
+    public SocialLoginResponse kakaoCodeLogin(String code) {
+        // 카카오 토큰 교환 URL
+        RestTemplate restTemplate = new RestTemplate();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+        MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+        params.add("grant_type", "authorization_code");
+        params.add("client_id", kakaoRestKey);
+        params.add("redirect_uri", kakaoRedirectUri);
+        params.add("code", code);
+
+        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(params, headers);
+
+        // 카카오 서버에서 액세스 토큰 받아오기
+        ResponseEntity<Map<String, Object>> tokenResponse = restTemplate.exchange(
+                "https://kauth.kakao.com/oauth/token",
+                HttpMethod.POST, request,
+                new ParameterizedTypeReference<Map<String, Object>>() {});
+
+        String accessToken = (String) tokenResponse.getBody().get("access_token");
+
+        // 기존 로그인 로직 재사용
+        return socialLogin(accessToken, Provider.KAKAO);
+    }
 
     /**
      * 회원가입 및 로그인
@@ -174,8 +218,6 @@ public class AuthService {
                             remaining,
                             TimeUnit.MILLISECONDS);
         }
-
-
     }
 
     /**
@@ -205,5 +247,4 @@ public class AuthService {
         // 새 access token + refresh token 반환
         return new ReissueResponse(newAccessToken, newRefreshToken);
     }
-
 }
