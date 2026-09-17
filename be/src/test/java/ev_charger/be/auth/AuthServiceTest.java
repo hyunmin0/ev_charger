@@ -8,6 +8,7 @@ import ev_charger.be.auth.dto.response.SocialLoginResponse;
 import ev_charger.be.auth.dto.response.TempUserInfo;
 import ev_charger.be.auth.dto.response.UserInfo;
 import ev_charger.be.auth.redis.RedisKeys;
+import ev_charger.be.common.exception.InternalServerException;
 import ev_charger.be.security.JwtProvider;
 import ev_charger.be.user.User;
 import ev_charger.be.user.UserRepository;
@@ -275,8 +276,9 @@ public class AuthServiceTest {
 
         // when & then
         assertThatThrownBy(() -> authService.register(request))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("tempToken 데이터가 손상되었습니다.");
+                .isInstanceOf(InternalServerException.class)
+                .hasMessage("회원가입 정보를 확인할 수 없습니다. 다시 로그인해 주세요.")
+                .hasCauseInstanceOf(RuntimeException.class);
     }
 
     @Test

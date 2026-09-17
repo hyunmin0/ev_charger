@@ -5,6 +5,7 @@ import ev_charger.be.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -19,6 +20,7 @@ import java.util.List;
 
 @Configuration // configuration 등록
 @EnableWebSecurity // spring security 활성화
+@EnableMethodSecurity // @PreAuthorize 등 메서드 단위 권한 검사 활성화
 @RequiredArgsConstructor // final 생성자 자동 생성
 public class SecurityConfig {
 

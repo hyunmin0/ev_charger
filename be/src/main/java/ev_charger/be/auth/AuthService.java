@@ -8,6 +8,7 @@ import ev_charger.be.auth.dto.response.TempUserInfo;
 import ev_charger.be.auth.dto.response.UserInfo;
 import ev_charger.be.auth.redis.RedisKeys;
 import ev_charger.be.auth.redis.RedisTtl;
+import ev_charger.be.common.exception.InternalServerException;
 import ev_charger.be.security.JwtProvider;
 import ev_charger.be.user.enums.Provider;
 import ev_charger.be.user.User;
@@ -204,7 +205,7 @@ public class AuthService {
         try {
             temp = objectMapper.readValue(json, TempUserInfo.class);
         } catch (Exception e) {
-            throw new IllegalStateException("tempToken 데이터가 손상되었습니다.");
+            throw new InternalServerException("회원가입 정보를 확인할 수 없습니다. 다시 로그인해 주세요.", e); // 원인(e)은 로그로 추적
         }
 
         // email 값 추출(없으면 null)
