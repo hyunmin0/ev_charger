@@ -15,6 +15,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
 import java.util.List;
 import java.util.UUID;
@@ -60,7 +61,7 @@ public class JwtAuthenticationFilterTest {
         request.addHeader("Authorization", "Bearer " + token);
         MockHttpServletResponse response = new MockHttpServletResponse();
 
-        given(jwtProvider.validateToken(token)).willReturn(true);
+        given(jwtProvider.validateAccessToken(token)).willReturn(true);
         given(redisTemplate.hasKey("blacklist:" + token)).willReturn(false);
         given(jwtProvider.extractUserId(token)).willReturn(userId);
         given(customUserDetailsService.loadUserByUsername(userId.toString())).willReturn(userDetails);
@@ -101,7 +102,7 @@ public class JwtAuthenticationFilterTest {
 
         // then
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
-        verify(jwtProvider, never()).validateToken(anyString());
+        verify(jwtProvider, never()).validateAccessToken(anyString());
         verify(filterChain).doFilter(request, response);
     }
 
@@ -113,7 +114,7 @@ public class JwtAuthenticationFilterTest {
         request.addHeader("Authorization", "Bearer " + token);
         MockHttpServletResponse response = new MockHttpServletResponse();
 
-        given(jwtProvider.validateToken(token)).willReturn(false);
+        given(jwtProvider.validateAccessToken(token)).willReturn(false);
 
         // when
         jwtAuthenticationFilter.doFilter(request, response, filterChain);
@@ -131,7 +132,7 @@ public class JwtAuthenticationFilterTest {
         request.addHeader("Authorization", "Bearer " + token);
         MockHttpServletResponse response = new MockHttpServletResponse();
 
-        given(jwtProvider.validateToken(token)).willReturn(true);
+        given(jwtProvider.validateAccessToken(token)).willReturn(true);
         given(redisTemplate.hasKey("blacklist:" + token)).willReturn(true);
 
         // when
@@ -140,6 +141,29 @@ public class JwtAuthenticationFilterTest {
         // then
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         verify(customUserDetailsService, never()).loadUserByUsername(anyString());
+        verify(filterChain).doFilter(request, response);
+    }
+
+    @Test
+    void 토큰은_유효하지만_유저가_없으면_인증_없이_다음_필터로_진행한다() throws Exception {
+        // given
+        String token = "deleted-user-token";
+        UUID userId = UUID.randomUUID();
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Bearer " + token);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        given(jwtProvider.validateAccessToken(token)).willReturn(true);
+        given(redisTemplate.hasKey("blacklist:" + token)).willReturn(false);
+        given(jwtProvider.extractUserId(token)).willReturn(userId);
+        given(customUserDetailsService.loadUserByUsername(userId.toString()))
+                .willThrow(new UsernameNotFoundException("유저를 찾을 수 없습니다."));
+
+        // when
+        jwtAuthenticationFilter.doFilter(request, response, filterChain);
+
+        // then
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         verify(filterChain).doFilter(request, response);
     }
 

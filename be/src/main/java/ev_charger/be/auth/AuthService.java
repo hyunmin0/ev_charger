@@ -213,7 +213,7 @@ public class AuthService {
 
         // 중복 확인
         if (userRepository.existsByProviderAndProviderId(temp.provider(),temp.providerId())) {
-            throw new IllegalStateException("이미 가입된 사용자 입니다.");
+            throw new IllegalStateException("이미 가입된 사용자입니다.");
         }
 
         // profileImage 조회
@@ -278,8 +278,8 @@ public class AuthService {
      */
     @Transactional // db 저장 중 오류 나면 롤백
     public ReissueResponse reissue(String refreshToken) {
-        // 서명/만료 검증
-        if (!jwtProvider.validateToken(refreshToken)) {
+        // 서명/만료/토큰 종류 검증 (access token으로는 재발급 불가)
+        if (!jwtProvider.validateRefreshToken(refreshToken)) {
             throw new IllegalArgumentException("유효하지 않은 refresh token");
         }
 

@@ -11,6 +11,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -31,8 +32,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // 토큰 추출
         String token = resolveToken(request);
 
-        // 토큰 검증
-        if (token != null && jwtProvider.validateToken(token)) {
+        // 토큰 검증 (access token만 인증에 사용, refresh token은 거부)
+        if (token != null && jwtProvider.validateAccessToken(token)) {
             // blacklist에 있는지 확인 -> 있으면 인증 없이 return
             if (Boolean.TRUE.equals(redisTemplate.hasKey("blacklist:" + token))) {
                 filterChain.doFilter(request,response);
@@ -40,7 +41,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
             // 유저 조회
             String userId = jwtProvider.extractUserId(token).toString();
-            UserDetails userDetails = customUserDetailsService.loadUserByUsername(userId);
+            UserDetails userDetails;
+            try {
+                userDetails = customUserDetailsService.loadUserByUsername(userId);
+            } catch (UsernameNotFoundException e) {
+                // 토큰은 유효하지만 탈퇴 등으로 유저가 없음 -> 인증 없이 진행 (이후 security가 401/403 처리)
+                // 필터에서 난 예외는 GlobalExceptionHandler에 잡히지 않으므로 여기서 처리
+                filterChain.doFilter(request, response);
+                return;
+            }
 
             // 파라미터 3개: 인증 완료 / 파라미터 2개: 인증 전 상태
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(

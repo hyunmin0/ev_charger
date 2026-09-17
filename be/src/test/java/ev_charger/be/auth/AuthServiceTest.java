@@ -304,7 +304,7 @@ public class AuthServiceTest {
         // when & then
         assertThatThrownBy(() -> authService.register(request))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessage("이미 가입된 사용자 입니다.");
+                .hasMessage("이미 가입된 사용자입니다.");
     }
 
     @Test
@@ -363,6 +363,26 @@ public class AuthServiceTest {
     }
 
     @Test
+    void 만료된_accessToken으로_로그아웃하면_블랙리스트_등록없이_성공() {
+        // given
+        String refreshToken = UUID.randomUUID().toString();
+        String accessToken = UUID.randomUUID().toString();
+        User user = User.builder()
+                .refreshToken(refreshToken)
+                .build();
+
+        given(userRepository.findByRefreshToken(refreshToken)).willReturn(Optional.of(user));
+        given(jwtProvider.getAccessExpiration(accessToken)).willReturn(0L); // 만료된 토큰
+
+        // when
+        authService.logout(accessToken, refreshToken);
+
+        // then
+        assertThat(user.getRefreshToken()).isNull();
+        verify(redisTemplate, never()).opsForValue();
+    }
+
+    @Test
     void 로그아웃_도중_유효하지_않은_refreshToken이면_예외_발생() {
         // given
         String refreshToken = UUID.randomUUID().toString();
@@ -382,7 +402,7 @@ public class AuthServiceTest {
                         .refreshToken(refreshToken)
                         .build();
 
-        given(jwtProvider.validateToken(refreshToken)).willReturn(true);
+        given(jwtProvider.validateRefreshToken(refreshToken)).willReturn(true);
         given(userRepository.findByRefreshToken(refreshToken)).willReturn(Optional.of(user));
         given(jwtProvider.generateAccessToken(any())).willReturn("new-access-token");
         given(jwtProvider.generateRefreshToken(any())).willReturn("new-refresh-token");
@@ -401,7 +421,7 @@ public class AuthServiceTest {
         // given
         String refreshToken = UUID.randomUUID().toString();
 
-        given(jwtProvider.validateToken(refreshToken)).willReturn(false);
+        given(jwtProvider.validateRefreshToken(refreshToken)).willReturn(false);
 
         // when & then
         assertThatThrownBy(() -> authService.reissue(refreshToken))
@@ -414,7 +434,7 @@ public class AuthServiceTest {
         // given
         String refreshToken = UUID.randomUUID().toString();
 
-        given(jwtProvider.validateToken(refreshToken)).willReturn(true);
+        given(jwtProvider.validateRefreshToken(refreshToken)).willReturn(true);
         given(userRepository.findByRefreshToken(refreshToken)).willReturn((Optional.empty()));
 
         // when & then

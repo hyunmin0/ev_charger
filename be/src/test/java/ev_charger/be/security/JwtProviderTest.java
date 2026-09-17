@@ -9,6 +9,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class JwtProviderTest {
 
@@ -58,7 +59,43 @@ public class JwtProviderTest {
         String token = jwtProvider.generateAccessToken(uuid);
 
         // when
-        boolean isValid = jwtProvider.validateToken(token);
+        boolean isValid = jwtProvider.validateAccessToken(token);
+
+        // then
+        assertThat(isValid).isTrue();
+    }
+
+    @Test
+    void 리프레시_토큰은_액세스_토큰_유효성_검사에_실패한다() {
+        // given
+        String refreshToken = jwtProvider.generateRefreshToken(UUID.randomUUID());
+
+        // when
+        boolean isValid = jwtProvider.validateAccessToken(refreshToken);
+
+        // then
+        assertThat(isValid).isFalse();
+    }
+
+    @Test
+    void 액세스_토큰은_리프레시_토큰_유효성_검사에_실패한다() {
+        // given
+        String accessToken = jwtProvider.generateAccessToken(UUID.randomUUID());
+
+        // when
+        boolean isValid = jwtProvider.validateRefreshToken(accessToken);
+
+        // then
+        assertThat(isValid).isFalse();
+    }
+
+    @Test
+    void 생성한_리프레시_토큰은_리프레시_토큰_유효성_검사를_통과한다() {
+        // given
+        String refreshToken = jwtProvider.generateRefreshToken(UUID.randomUUID());
+
+        // when
+        boolean isValid = jwtProvider.validateRefreshToken(refreshToken);
 
         // then
         assertThat(isValid).isTrue();
@@ -94,6 +131,30 @@ public class JwtProviderTest {
     }
 
     @Test
+    void 만료된_토큰의_남은_만료_시간은_0이다() {
+        // given
+        ReflectionTestUtils.setField(jwtProvider, "accessExpiration", -1000L);
+        String token = jwtProvider.generateAccessToken(UUID.randomUUID());
+
+        // when
+        long expiration = jwtProvider.getAccessExpiration(token);
+
+        // then
+        assertThat(expiration).isZero();
+    }
+
+    @Test
+    void 위조된_토큰의_남은_만료_시간을_구하면_예외가_발생한다() {
+        // given
+        String token = "invalid-token";
+
+        // when & then
+        assertThatThrownBy(() -> jwtProvider.getAccessExpiration(token))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("유효하지 않은 access token");
+    }
+
+    @Test
     void 만료된_토큰은_유효성_검사에_실패한다() {
         // given
         ReflectionTestUtils.setField(jwtProvider, "accessExpiration", -1000L);
@@ -101,7 +162,7 @@ public class JwtProviderTest {
         String token = jwtProvider.generateAccessToken(uuid);
 
         // when
-        boolean isValid = jwtProvider.validateToken(token);
+        boolean isValid = jwtProvider.validateAccessToken(token);
 
         // then
         assertThat(isValid).isFalse();
@@ -115,7 +176,7 @@ public class JwtProviderTest {
         String forgedToken = token.substring(0, token.length() - 1) + "x"; // 마지막 글자 변조
 
         // when
-        boolean isValid = jwtProvider.validateToken(forgedToken);
+        boolean isValid = jwtProvider.validateAccessToken(forgedToken);
 
         // then
         assertThat(isValid).isFalse();
