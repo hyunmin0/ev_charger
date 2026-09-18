@@ -13,6 +13,8 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 // 모든 에러 응답을 ErrorResponse { message } 형식으로 통일
+// ResponseEntityExceptionHandler를 상속했기 때문에, 우리가 던진 예외뿐 아니라
+// 스프링 MVC가 컨트롤러 진입 전에 직접 던지는 예외(파라미터 누락 등)까지 여기서 함께 처리된다
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
@@ -20,6 +22,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     // 잘못된 요청/유효성 검증 실패 (존재하지 않는 리소스, 중복 등록, 권한 없음 등)
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
+        // 서비스에서 작성한 메시지를 그대로 내려준다 (사용자에게 보여줄 문구라는 전제)
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse(e.getMessage()));
     }
 
@@ -55,15 +58,24 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ErrorResponse("일시적인 서버 오류가 발생했습니다."));
     }
 
-    // 스프링 MVC 예외(파라미터 누락, JSON 형식 오류, 타입 불일치, 지원하지 않는 메서드 등)
+    // 스프링 MVC 예외(파라미터 누락, JSON 형식 오류, 타입 불일치, 지원하지 않는 메서드 등)의 최종 응답 변환 지점
+    //
+    // 처리 흐름
+    //  1) @RequestParam 누락 -> 스프링이 MissingServletRequestParameterException을 던짐 (컨트롤러는 실행되지 않음)
+    //  2) 부모 클래스(ResponseEntityExceptionHandler)가 예외 종류에 맞는 상태 코드(400/405/415 ...)를 정해서
+    //  3) 이 메서드로 넘겨줌
+    //
     // 상태 코드(400, 405, 415 등)는 스프링이 정한 값을 유지하고, 본문만 ErrorResponse로 변환
     @Override
     protected ResponseEntity<Object> handleExceptionInternal(
             Exception ex, Object body, HttpHeaders headers, HttpStatusCode statusCode, WebRequest request) {
         if (statusCode.is5xxServerError()) {
+            // 스프링 내부에서 난 오류라 원인은 로그로만 남기고, 응답에는 고정 메시지만 내려준다
             log.error("스프링 MVC 내부 오류", ex);
             return ResponseEntity.status(statusCode).headers(headers).body(new ErrorResponse("일시적인 서버 오류가 발생했습니다."));
         }
+        // 4xx는 예외 종류를 구분하지 않고 이 메시지로 통일 (어떤 파라미터가 왜 틀렸는지 등 내부 구현 노출 방지)
+        // 파라미터 누락 / 타입 불일치 / JSON 형식 오류 / 405 / 415 전부 여기로 온다
         return ResponseEntity.status(statusCode).headers(headers).body(new ErrorResponse("잘못된 요청입니다."));
     }
 }

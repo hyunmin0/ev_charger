@@ -66,7 +66,7 @@ public class UserController {
      * @param fcmToken
      * @return
      */
-    @DeleteMapping("fcm-token")
+    @DeleteMapping("/fcm-token")
     public ResponseEntity<String> deleteFcmToken(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @RequestParam String fcmToken

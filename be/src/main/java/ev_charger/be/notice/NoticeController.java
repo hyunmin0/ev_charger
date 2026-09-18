@@ -23,7 +23,7 @@ public class NoticeController {
 
     // 공지 등록
     @PreAuthorize("hasRole('ADMIN')") // 관리자 권한 확인
-    @PostMapping("")
+    @PostMapping
     public ResponseEntity<Void> createNotice(
             @RequestBody NoticeCreateRequest request // title, content
     ) {
@@ -37,7 +37,7 @@ public class NoticeController {
      * @param noticeId
      * @return
      */
-    @GetMapping("{noticeId}")
+    @GetMapping("/{noticeId}")
     public ResponseEntity<NoticeResponse> getNotice(
             @AuthenticationPrincipal CustomUserDetails userDetails, // 비로그인 시 null
             @PathVariable("noticeId") Long noticeId) {
