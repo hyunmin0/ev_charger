@@ -150,7 +150,7 @@ export default function HomeScreen() {
           lat: userLat.current,
           lng: userLng.current,
           range: RADIUS_METERS[radiusIdx],
-          availableOnly: available,
+          "filter.availableOnly": available,
           ...(cursor ? { cursor } : {}),
         },
       });
