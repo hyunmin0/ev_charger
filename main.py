@@ -1,9 +1,16 @@
+import logging
+
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.security import APIKeyHeader
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
 import config
+from db import AsyncSessionLocal, DB_ERRORS
 from schemas import ChatRequest, ChatResponse
 from chat_service import chat
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -23,3 +30,27 @@ def verify_internal_key(key: str = Depends(api_key_header)):
 @app.post("/chat", response_model=ChatResponse, dependencies=[Depends(verify_internal_key)])
 async def chat_endpoint(request: ChatRequest):
     return await chat(request)
+
+
+# 프로세스가 요청을 받을 수 있는지만 확인 (인증 없음 — 프로세스 매니저/백엔드가 부담 없이 찌를 수 있게)
+# DB를 여기서 확인하지 않는 이유: DB가 잠깐 끊겼다고 멀쩡한 서버가 재시작 루프에 빠지면 안 됨
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
+# DB 도달성까지 확인 (배포 직후 확인용 / 장애 원인 구분용)
+# 실패해도 예외를 던지지 않고 503 + 이유를 내려줘서, 호출한 쪽이 로그 없이도 원인을 알 수 있게 한다
+@app.get("/health/db")
+async def health_db():
+    try:
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+    except DB_ERRORS as e:
+        logger.exception("health check DB 연결 실패")
+        return JSONResponse(
+            status_code=503,
+            content={"status": "error", "detail": f"DB 연결 실패: {type(e).__name__}"},
+        )
+
+    return {"status": "ok"}

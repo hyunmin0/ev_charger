@@ -1,7 +1,14 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import SQLAlchemyError
 
 import config
+
+# DB 조회를 감쌀 때 잡아야 하는 예외들.
+# DB 호스트에 아예 못 붙는 경우(연결 거부, DNS 실패, 연결 타임아웃)는 SQLAlchemy가 감싸주지 않고
+# ConnectionRefusedError 같은 OSError가 그대로 올라온다 — 실제로 DB를 끄고 확인함.
+# SQLAlchemyError만 잡으면 정작 "DB 다운"이라는 가장 흔한 장애를 놓치므로 OSError도 같이 잡는다.
+DB_ERRORS = (SQLAlchemyError, OSError)
 
 # asyncpg 드라이버 사용 → DATABASE_URL 앞에 postgresql+asyncpg:// 형식이어야 함
 engine = create_async_engine(config.DATABASE_URL)

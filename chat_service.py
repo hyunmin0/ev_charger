@@ -1,11 +1,14 @@
 import json
+import logging
 from openai import AsyncOpenAI
 
 import config
 from schemas import ChatRequest, ChatResponse, Station
 from prompts import build_system_prompt
 from context import get_my_car
-from tools import ACTIVE_TOOLS, TOOL_FUNCTIONS
+from tools import ACTIVE_TOOLS, TOOL_FUNCTIONS, STATION_RESULT_TOOLS
+
+logger = logging.getLogger(__name__)
 
 client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
 
@@ -51,12 +54,22 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
         for tool_call in assistant_message.tool_calls:
             name = tool_call.function.name
-            args = json.loads(tool_call.function.arguments)
 
-            result = await TOOL_FUNCTIONS[name](**args) # tool 함수 호출
+            # tool 이름/인자는 LLM이 만든 값이라 깨질 수 있음 (없는 tool, 잘못된 인자, 깨진 JSON).
+            # 여기서 막지 않으면 요청 전체가 500이 되므로, error를 tool 결과로 돌려주고 대화를 계속한다
+            try:
+                args = json.loads(tool_call.function.arguments)
+                result = await TOOL_FUNCTIONS[name](**args) # tool 함수 호출
+            except Exception:
+                logger.exception("tool 실행 실패 (name=%s, args=%s)", name, tool_call.function.arguments)
+                result = json.dumps(
+                    {"error": f"{name} 실행에 실패했습니다."},
+                    ensure_ascii=False,
+                )
 
-            # get_nearby_stations 결과에서 stations 추출 (마지막 호출 결과가 최종값)
-            if name == "get_nearby_stations":
+            # 충전소 목록을 돌려주는 tool 결과에서 stations 추출 (마지막 호출 결과가 최종값)
+            # 실패해서 error만 담긴 경우엔 stations가 없으므로 빈 리스트가 된다
+            if name in STATION_RESULT_TOOLS:
                 result_data = json.loads(result)
                 stations = [Station(**s) for s in result_data.get("stations", [])]
 
