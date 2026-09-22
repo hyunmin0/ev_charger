@@ -1,6 +1,9 @@
 # 환경변수 / 시크릿
 .env
 *.env.local
+application.yml
+application-*.yml
+firebase-service-account.json
 
 # Python
 __pycache__/
