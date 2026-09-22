@@ -260,8 +260,9 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
      */
     private void appendFilterWithGroupBy(StringBuilder sql, StationFilter filter) {
         // station 조건
-        if (filter.parkingFree()) sql.append(" AND s.parkingFree = 'Y'\n");
-        if (filter.limitYn()) sql.append(" AND s.limitYn = 'N'\n");
+        // Boolean.TRUE.equals: true일 때만 조건 추가 (null, false면 조건 없음)
+        if (Boolean.TRUE.equals(filter.parkingFree())) sql.append(" AND s.parkingFree = 'Y'\n");
+        if (Boolean.TRUE.equals(filter.limitYn())) sql.append(" AND s.limitYn = 'N'\n");
         // NUMERIC으로 변환 후 비교
         // NUMERIC: 소수점 포함 순자 타입
         if (filter.minOutput() != null) sql.append(" AND CAST(c.output AS NUMERIC) >= :minOutput\n");
@@ -278,7 +279,7 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
             """);
 
         // availableOnly = true면 사용 가능한 충전기(stat='2')가 1개 이상인 충전소만 반환
-        if (filter.availableOnly()) sql.append(" having count(c.chgerId) filter (where c.stat = '2') > 0 -- availableOnly = false면 전체 조회, true면 충전 가능한 충전소만 조회\n");
+        if (Boolean.TRUE.equals(filter.availableOnly())) sql.append(" having count(c.chgerId) filter (where c.stat = '2') > 0 -- availableOnly = false면 전체 조회, true면 충전 가능한 충전소만 조회\n");
 
         // 정렬
         sql.append(" order by distance -- 거리순");

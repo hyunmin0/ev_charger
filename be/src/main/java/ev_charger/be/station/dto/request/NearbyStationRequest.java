@@ -10,4 +10,8 @@ public record NearbyStationRequest(
         String cursor, // 인코딩된 distance(nullable)
         StationFilter filter
 ) {
+    public NearbyStationRequest {
+        // filter.* 파라미터가 하나도 없으면 null로 바인딩되므로 빈 필터로 대체
+        if (filter == null) filter = StationFilter.empty();
+    }
 }
