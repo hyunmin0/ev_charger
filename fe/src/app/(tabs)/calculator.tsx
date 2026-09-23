@@ -20,6 +20,7 @@ const BASE_CARS = [
   { label: "테슬라 모델 Y (75kWh)", capacity: 75 },
 ];
 
+// 기본 충전기 목록 (내 차 데이터 없을 때 사용)
 const CHARGERS = [
   { label: "완속 AC (3kW)", kw: 3, type: "완속" },
   { label: "완속 AC (7kW)", kw: 7, type: "완속" },
@@ -27,6 +28,23 @@ const CHARGERS = [
   { label: "급속 DC (100kW)", kw: 100, type: "급속" },
   { label: "급속 DC (350kW)", kw: 350, type: "급속" },
 ];
+
+// 충전기 타입별 기준 SOC 구간 (%)
+const REF_RANGE: Record<string, { fromSoc: number; toSoc: number }> = {
+  "완속":   { fromSoc: 10, toSoc: 100 }, // 기준% = 90
+  "급속":   { fromSoc: 10, toSoc: 80  }, // 기준% = 70
+  "휴대용": { fromSoc: 10, toSoc: 100 }, // 기준% = 90
+};
+
+type CarOption = { label: string; capacity: number; isMine?: boolean; carId?: number };
+type RefCharger = { chargerType: string; chargerOutput: number | null; minutes: number };
+
+function refChargerLabel(c: RefCharger): string {
+  if (c.chargerType === "급속" && c.chargerOutput != null) return `급속 DC (${c.chargerOutput}kW)`;
+  if (c.chargerType === "완속") return "완속 충전";
+  if (c.chargerType === "휴대용") return "휴대용 충전";
+  return c.chargerType;
+}
 
 function Slider({ min, max, step, value, onChange }: {
   min: number; max: number; step: number;
@@ -79,29 +97,35 @@ function Slider({ min, max, step, value, onChange }: {
   );
 }
 
-type CarOption = { label: string; capacity: number; isMine?: boolean };
-
 export default function CalculatorScreen() {
   const [carOptions, setCarOptions] = useState<CarOption[]>(BASE_CARS);
   const [car, setCar] = useState("선택 안함");
   const [dropCar, setDropCar] = useState(false);
   const [dropCharger, setDropCharger] = useState(false);
+
+  // 내 차 기준 충전 데이터
+  const [refChargers, setRefChargers] = useState<RefCharger[]>([]);
+  // 선택된 기준 충전기 (내 차 모드)
+  const [selectedRef, setSelectedRef] = useState<RefCharger | null>(null);
+  // 일반 충전기 (kW 모드)
   const [charger, setCharger] = useState(CHARGERS[0]);
+
   const [soc, setSoc] = useState(34);
   const [mode, setMode] = useState<"target" | "time">("target");
   const [targetSoc, setTargetSoc] = useState(60);
   const [availableMin, setAvailableMin] = useState("");
   const [result, setResult] = useState<string | null>(null);
 
+  // 로그인된 경우 내 차 목록 상단에 추가
   useEffect(() => {
-    // 로그인된 경우 내 차 목록을 상단에 추가
-    api.get<{ userCarId: String; carName: string; batteryCapacity: number }[]>("/user/cars")
+    api.get<{ userCarId: string; carId: number; carName: string; batteryCapacity: number }[]>("/user/cars")
       .then(res => {
         if (res.data.length > 0) {
           const myCars: CarOption[] = res.data.map(c => ({
             label: `⭐ ${c.carName}`,
             capacity: c.batteryCapacity,
             isMine: true,
+            carId: c.carId,
           }));
           setCarOptions([BASE_CARS[0], ...myCars, ...BASE_CARS.slice(1)]);
         }
@@ -109,27 +133,78 @@ export default function CalculatorScreen() {
       .catch(() => {}); // 비로그인이면 무시
   }, []);
 
-  const isFast = charger.type === "급속";
+  // 내 차 선택 시 기준 충전 데이터 가져오기
+  useEffect(() => {
+    const selected = carOptions.find(c => c.label === car);
+    if (selected?.isMine && selected.carId) {
+      api.get<RefCharger[]>(`/cars/${selected.carId}/charges`)
+        .then(res => {
+          setRefChargers(res.data);
+          setSelectedRef(res.data.length > 0 ? res.data[0] : null);
+        })
+        .catch(() => {
+          setRefChargers([]);
+          setSelectedRef(null);
+        });
+    } else {
+      setRefChargers([]);
+      setSelectedRef(null);
+    }
+    setResult(null);
+  }, [car]);
+
+  // 현재 내 차 기준 데이터 모드 여부
+  const isRefMode = refChargers.length > 0;
+
+  // targetMax: 급속은 80%, 완속/휴대용은 100%
+  const currentChargerType = isRefMode ? (selectedRef?.chargerType ?? "완속") : charger.type;
+  const isFast = currentChargerType === "급속";
   const targetMax = isFast ? 80 : 100;
 
   const calculate = () => {
     const capacity = carOptions.find(c => c.label === car)?.capacity ?? 64;
-    if (mode === "target") {
-      if (targetSoc <= soc) { setResult("목표 배터리가 현재 잔량보다 낮아요."); return; }
-      const hours = ((targetSoc - soc) / 100) * capacity / charger.kw;
-      const totalMin = Math.round(hours * 60);
-      if (totalMin >= 60) {
-        const h = Math.floor(totalMin / 60), m = totalMin % 60;
-        setResult(`실제 충전 시간은 차량 기종, 배터리 상태, 충전소에 따라 달라질 수 있습니다.\n\n약 ${h}시간 ${m > 0 ? m + "분" : ""} 소요됩니다.`);
+
+    if (isRefMode && selectedRef) {
+      // 기준 시간 공식: 소요시간 = (목표% - 현재%) / 기준% × 기준시간
+      const ref = REF_RANGE[selectedRef.chargerType] ?? { fromSoc: 10, toSoc: 100 };
+      const refRange = ref.toSoc - ref.fromSoc;
+
+      if (mode === "target") {
+        if (targetSoc <= soc) { setResult("목표 배터리가 현재 잔량보다 낮아요."); return; }
+        const totalMin = Math.round((targetSoc - soc) / refRange * selectedRef.minutes);
+        if (totalMin >= 60) {
+          const h = Math.floor(totalMin / 60), m = totalMin % 60;
+          setResult(`실제 충전 시간은 차량 기종, 배터리 상태, 충전소에 따라 달라질 수 있습니다.\n\n약 ${h}시간 ${m > 0 ? m + "분" : ""} 소요됩니다.`);
+        } else {
+          setResult(`실제 충전 시간은 차량 기종, 배터리 상태, 충전소에 따라 달라질 수 있습니다.\n\n약 ${totalMin}분 소요됩니다.`);
+        }
       } else {
-        setResult(`실제 충전 시간은 차량 기종, 배터리 상태, 충전소에 따라 달라질 수 있습니다.\n\n약 ${totalMin}분 소요됩니다.`);
+        const mins = parseInt(availableMin);
+        if (!mins || mins <= 0) { setResult("충전 가능 시간을 입력해주세요."); return; }
+        // 기준 충전률(%/분) = 기준% / 기준시간
+        const ratePerMin = refRange / selectedRef.minutes;
+        const reachable = Math.min(Math.round(soc + ratePerMin * mins), targetMax);
+        setResult(`실제 충전 시간은 차량 기종, 배터리 상태, 충전소에 따라 달라질 수 있습니다.\n\n${mins}분 충전 시 약 ${reachable}%까지 충전 가능합니다.`);
       }
     } else {
-      const mins = parseInt(availableMin);
-      if (!mins || mins <= 0) { setResult("충전 가능 시간을 입력해주세요."); return; }
-      const addedPct = (mins / 60) * charger.kw / capacity * 100;
-      const reachable = Math.min(Math.round(soc + addedPct), targetMax);
-      setResult(`실제 충전 시간은 차량 기종, 배터리 상태, 충전소에 따라 달라질 수 있습니다.\n\n${mins}분 충전 시 약 ${reachable}%까지 충전 가능합니다.`);
+      // 기존 kW 공식 (BASE_CARS)
+      if (mode === "target") {
+        if (targetSoc <= soc) { setResult("목표 배터리가 현재 잔량보다 낮아요."); return; }
+        const hours = ((targetSoc - soc) / 100) * capacity / charger.kw;
+        const totalMin = Math.round(hours * 60);
+        if (totalMin >= 60) {
+          const h = Math.floor(totalMin / 60), m = totalMin % 60;
+          setResult(`실제 충전 시간은 차량 기종, 배터리 상태, 충전소에 따라 달라질 수 있습니다.\n\n약 ${h}시간 ${m > 0 ? m + "분" : ""} 소요됩니다.`);
+        } else {
+          setResult(`실제 충전 시간은 차량 기종, 배터리 상태, 충전소에 따라 달라질 수 있습니다.\n\n약 ${totalMin}분 소요됩니다.`);
+        }
+      } else {
+        const mins = parseInt(availableMin);
+        if (!mins || mins <= 0) { setResult("충전 가능 시간을 입력해주세요."); return; }
+        const addedPct = (mins / 60) * charger.kw / capacity * 100;
+        const reachable = Math.min(Math.round(soc + addedPct), targetMax);
+        setResult(`실제 충전 시간은 차량 기종, 배터리 상태, 충전소에 따라 달라질 수 있습니다.\n\n${mins}분 충전 시 약 ${reachable}%까지 충전 가능합니다.`);
+      }
     }
   };
 
@@ -173,18 +248,35 @@ export default function CalculatorScreen() {
         <View style={s.card}>
           <Text style={s.cardLabel}>충전기 종류</Text>
           <TouchableOpacity style={s.selector} onPress={() => { setDropCharger(v => !v); setDropCar(false); }}>
-            <Text style={s.selectorText}>{charger.label}</Text>
+            <Text style={s.selectorText}>
+              {isRefMode
+                ? (selectedRef ? refChargerLabel(selectedRef) : "선택")
+                : charger.label}
+            </Text>
             <Ionicons name={dropCharger ? "chevron-up-outline" : "chevron-down-outline"} size={16} color="#888" />
           </TouchableOpacity>
           {dropCharger && (
             <View style={s.selectorDrop}>
-              {CHARGERS.map((c) => (
-                <TouchableOpacity key={c.label} style={[s.selectorItem, c.label === charger.label && s.dropActive]}
-                  onPress={() => { setCharger(c); setDropCharger(false); setTargetSoc(60); setResult(null); }}>
-                  <Text style={[s.dropText, c.label === charger.label && s.dropTextOn]}>{c.label}</Text>
-                  {c.label === charger.label && <Ionicons name="checkmark" size={16} color={ACCENT} />}
-                </TouchableOpacity>
-              ))}
+              {isRefMode
+                ? refChargers.map((c) => {
+                    const lbl = refChargerLabel(c);
+                    const isSelected = selectedRef?.chargerType === c.chargerType && selectedRef?.chargerOutput === c.chargerOutput;
+                    return (
+                      <TouchableOpacity key={lbl} style={[s.selectorItem, isSelected && s.dropActive]}
+                        onPress={() => { setSelectedRef(c); setDropCharger(false); setTargetSoc(60); setResult(null); }}>
+                        <Text style={[s.dropText, isSelected && s.dropTextOn]}>{lbl}</Text>
+                        {isSelected && <Ionicons name="checkmark" size={16} color={ACCENT} />}
+                      </TouchableOpacity>
+                    );
+                  })
+                : CHARGERS.map((c) => (
+                    <TouchableOpacity key={c.label} style={[s.selectorItem, c.label === charger.label && s.dropActive]}
+                      onPress={() => { setCharger(c); setDropCharger(false); setTargetSoc(60); setResult(null); }}>
+                      <Text style={[s.dropText, c.label === charger.label && s.dropTextOn]}>{c.label}</Text>
+                      {c.label === charger.label && <Ionicons name="checkmark" size={16} color={ACCENT} />}
+                    </TouchableOpacity>
+                  ))
+              }
             </View>
           )}
         </View>
@@ -210,7 +302,7 @@ export default function CalculatorScreen() {
                 <Text style={s.rangeHint}>10% ~ {targetMax}%</Text>
               </View>
               <Text style={s.bigVal}>{targetSoc}%</Text>
-              <Slider min={10} max={targetMax} step={1} value={targetSoc}
+              <Slider min={10} max={targetMax} step={1} value={Math.min(targetSoc, targetMax)}
                 onChange={(v) => { setTargetSoc(v); setResult(null); }} />
               {isFast && <Text style={s.hint}>급속 충전은 배터리 보호를 위해 80%까지 권장해요.</Text>}
             </View>

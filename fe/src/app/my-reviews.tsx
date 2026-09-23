@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, FlatList, Image, Alert, ActivityIndicator } from "react-native";
+import React, { useState, useCallback } from "react";
+import { View, Text, TouchableOpacity, StyleSheet, FlatList, Image, Alert, ActivityIndicator, Modal, TextInput } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
@@ -29,6 +29,13 @@ export default function MyReviewsScreen() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // 리뷰 수정 모달 상태
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingReview, setEditingReview] = useState<Review | null>(null);
+  const [editRating, setEditRating] = useState(5);
+  const [editContent, setEditContent] = useState("");
+  const [editSubmitting, setEditSubmitting] = useState(false);
+
   const fetchReviews = useCallback(async () => {
     setLoading(true);
     try {
@@ -41,12 +48,46 @@ export default function MyReviewsScreen() {
     }
   }, []);
 
-    useFocusEffect(
+  useFocusEffect(
     useCallback(() => {
       fetchReviews();
     }, [fetchReviews])
   );
 
+  const openEditModal = (review: Review) => {
+    setEditingReview(review);
+    setEditRating(review.rating);
+    setEditContent(review.content);
+    setEditModalVisible(true);
+  };
+
+  const handleEditSubmit = async () => {
+    if (!editingReview) return;
+    if (!editContent.trim()) {
+      Alert.alert("입력 오류", "리뷰 내용을 입력해주세요.");
+      return;
+    }
+    setEditSubmitting(true);
+    try {
+      await api.patch(`/reviews/${editingReview.reviewId}`, {
+        rating: editRating,
+        content: editContent.trim(),
+      });
+      setReviews(prev =>
+        prev.map(r =>
+          r.reviewId === editingReview.reviewId
+            ? { ...r, rating: editRating, content: editContent.trim(), isEdited: true }
+            : r
+        )
+      );
+      setEditModalVisible(false);
+      setEditingReview(null);
+    } catch (e: any) {
+      Alert.alert("오류", e?.response?.data?.message ?? "수정에 실패했어요. 다시 시도해주세요.");
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
 
   const handleDelete = (reviewId: number) => {
     Alert.alert("리뷰 삭제", "이 리뷰를 삭제할까요?", [
@@ -87,7 +128,7 @@ export default function MyReviewsScreen() {
           {formatDate(item.createdAt)}{item.isEdited ? " (수정됨)" : ""}
         </Text>
         <View style={styles.actions}>
-          <TouchableOpacity onPress={() => Alert.alert("준비 중", "수정 기능은 곧 제공될 예정이에요.")}>
+          <TouchableOpacity onPress={() => openEditModal(item)}>
             <Text style={styles.actionBtn}>수정</Text>
           </TouchableOpacity>
           <Text style={styles.divider}> | </Text>
@@ -127,6 +168,59 @@ export default function MyReviewsScreen() {
           }
         />
       )}
+
+      {/* 리뷰 수정 모달 */}
+      <Modal
+        visible={editModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setEditModalVisible(false)}
+        />
+        <View style={styles.modalSheet}>
+          <View style={styles.modalHandle} />
+          <Text style={styles.modalTitle}>리뷰 수정</Text>
+
+          <Text style={styles.modalLabel}>별점</Text>
+          <View style={styles.starRow}>
+            {[1, 2, 3, 4, 5].map((star) => (
+              <TouchableOpacity key={star} onPress={() => setEditRating(star)}>
+                <Ionicons
+                  name={star <= editRating ? "star" : "star-outline"}
+                  size={32}
+                  color="#FFB800"
+                />
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={styles.modalLabel}>내용</Text>
+          <TextInput
+            style={styles.modalInput}
+            value={editContent}
+            onChangeText={setEditContent}
+            placeholder="리뷰 내용을 입력해주세요"
+            placeholderTextColor="#bbb"
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+          />
+
+          <TouchableOpacity
+            style={[styles.modalSubmitBtn, editSubmitting && { opacity: 0.6 }]}
+            onPress={handleEditSubmit}
+            disabled={editSubmitting}
+          >
+            {editSubmitting
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Text style={styles.modalSubmitTxt}>수정 완료</Text>}
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -155,4 +249,14 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   empty: { alignItems: "center", paddingTop: 80, gap: 12 },
   emptyTxt: { fontSize: 15, color: "#bbb" },
+  // 모달
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.3)" },
+  modalSheet: { backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
+  modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#ddd", alignSelf: "center", marginBottom: 16 },
+  modalTitle: { fontSize: 17, fontWeight: "700", color: "#111", textAlign: "center", marginBottom: 20 },
+  modalLabel: { fontSize: 13, color: "#555", fontWeight: "600", marginBottom: 8 },
+  starRow: { flexDirection: "row", gap: 8, marginBottom: 20 },
+  modalInput: { borderWidth: 1.5, borderColor: "#e8e8e8", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, fontSize: 14, color: "#222", backgroundColor: "#fafafa", height: 100, marginBottom: 20 },
+  modalSubmitBtn: { backgroundColor: "#5B9CF6", borderRadius: 12, height: 50, alignItems: "center", justifyContent: "center" },
+  modalSubmitTxt: { color: "#fff", fontSize: 16, fontWeight: "600" },
 });

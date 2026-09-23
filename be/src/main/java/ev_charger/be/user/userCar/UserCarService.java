@@ -58,6 +58,7 @@ public class UserCarService {
                 .stream()
                 .map(uc -> new UserCarResponse(
                         uc.getUserCarId(),
+                        uc.getCar().getCarId(),
                         uc.getCar().getDisplayName(),
                         uc.getBatteryCapacity())
                 ).toList();

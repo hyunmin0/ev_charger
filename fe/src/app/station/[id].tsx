@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions,
-  ActivityIndicator, Alert,
+  ActivityIndicator, Alert, Modal, TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -112,6 +112,12 @@ export default function StationDetailScreen() {
   const [bookmarked, setBookmarked] = useState(false);
   const [bookmarkLoading, setBookmarkLoading] = useState(false);
 
+  // 리뷰 작성 모달 상태
+  const [reviewModalVisible, setReviewModalVisible] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewContent, setReviewContent] = useState("");
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+
   useEffect(() => {
     if (!id) return;
     (async () => {
@@ -144,6 +150,32 @@ export default function StationDetailScreen() {
       setBookmarkLoading(false);
     }
   }, [station, bookmarked, bookmarkLoading]);
+
+  const handleSubmitReview = async () => {
+    if (!reviewContent.trim()) {
+      Alert.alert("입력 오류", "리뷰 내용을 입력해주세요.");
+      return;
+    }
+    if (!station) return;
+    setReviewSubmitting(true);
+    try {
+      await api.post(`/reviews/${station.statId}`, {
+        rating: reviewRating,
+        content: reviewContent.trim(),
+      });
+      // 리뷰 작성 후 데이터 새로고침
+      const res = await api.get<StationDetail>(`/stations/${id}`);
+      setStation(res.data);
+      setReviewModalVisible(false);
+      setReviewRating(5);
+      setReviewContent("");
+      Alert.alert("완료", "리뷰가 등록되었습니다.");
+    } catch (e: any) {
+      Alert.alert("오류", e?.response?.data?.message ?? "리뷰 등록에 실패했습니다.");
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
 
   const stationTags: string[] = station ? [
     station.hasFast ? "급속" : "완속",
@@ -308,7 +340,7 @@ export default function StationDetailScreen() {
             </View>
             <TouchableOpacity
               style={styles.writeBtn}
-              onPress={() => Alert.alert("준비 중", "리뷰 작성 기능을 준비 중입니다.")}
+              onPress={() => setReviewModalVisible(true)}
             >
               <Text style={styles.writeBtnText}>리뷰 작성</Text>
             </TouchableOpacity>
@@ -329,6 +361,59 @@ export default function StationDetailScreen() {
           ))}
         </View>
       </ScrollView>
+
+      {/* 리뷰 작성 모달 */}
+      <Modal
+        visible={reviewModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setReviewModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setReviewModalVisible(false)}
+        />
+        <View style={styles.modalSheet}>
+          <View style={styles.modalHandle} />
+          <Text style={styles.modalTitle}>리뷰 작성</Text>
+
+          <Text style={styles.modalLabel}>별점</Text>
+          <View style={styles.starRow}>
+            {[1, 2, 3, 4, 5].map((star) => (
+              <TouchableOpacity key={star} onPress={() => setReviewRating(star)}>
+                <Ionicons
+                  name={star <= reviewRating ? "star" : "star-outline"}
+                  size={32}
+                  color="#FFB800"
+                />
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={styles.modalLabel}>내용</Text>
+          <TextInput
+            style={styles.modalInput}
+            value={reviewContent}
+            onChangeText={setReviewContent}
+            placeholder="충전소 이용 경험을 남겨주세요"
+            placeholderTextColor="#bbb"
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+          />
+
+          <TouchableOpacity
+            style={[styles.modalSubmitBtn, reviewSubmitting && { opacity: 0.6 }]}
+            onPress={handleSubmitReview}
+            disabled={reviewSubmitting}
+          >
+            {reviewSubmitting
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Text style={styles.modalSubmitTxt}>등록</Text>}
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -377,4 +462,14 @@ const styles = StyleSheet.create({
   reviewAuthor: { fontSize: 13, fontWeight: "600", color: "#333" },
   reviewDate: { fontSize: 11, color: "#aaa", marginLeft: "auto" as any },
   reviewContent: { fontSize: 13, color: "#555", lineHeight: 20 },
+  // 모달
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.3)" },
+  modalSheet: { backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
+  modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#ddd", alignSelf: "center", marginBottom: 16 },
+  modalTitle: { fontSize: 17, fontWeight: "700", color: "#111", textAlign: "center", marginBottom: 20 },
+  modalLabel: { fontSize: 13, color: "#555", fontWeight: "600", marginBottom: 8 },
+  starRow: { flexDirection: "row", gap: 8, marginBottom: 20 },
+  modalInput: { borderWidth: 1.5, borderColor: "#e8e8e8", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, fontSize: 14, color: "#222", backgroundColor: "#fafafa", height: 100, marginBottom: 20 },
+  modalSubmitBtn: { backgroundColor: "#5B9CF6", borderRadius: 12, height: 50, alignItems: "center", justifyContent: "center" },
+  modalSubmitTxt: { color: "#fff", fontSize: 16, fontWeight: "600" },
 });
