@@ -84,6 +84,7 @@ class UserCarControllerTest {
     private static final UUID USER_CAR_ID = UUID.randomUUID();
     private static final String CAR_NAME = "아이오닉 5";
     private static final UUID SECOND_USER_CAR_ID = UUID.randomUUID();
+    private static final long SECOND_CAR_ID = 2L;
     private static final String SECOND_CAR_NAME = "EV6";
     private static final float SECOND_BATTERY_CAPACITY = 84.0f;
 
@@ -117,8 +118,8 @@ class UserCarControllerTest {
         auth = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
 
         userCarResponses = List.of(
-                new UserCarResponse(USER_CAR_ID, CAR_NAME, BATTERY_CAPACITY),
-                new UserCarResponse(SECOND_USER_CAR_ID, SECOND_CAR_NAME, SECOND_BATTERY_CAPACITY)
+                new UserCarResponse(USER_CAR_ID, CAR_ID, CAR_NAME, BATTERY_CAPACITY),
+                new UserCarResponse(SECOND_USER_CAR_ID, SECOND_CAR_ID, SECOND_CAR_NAME, SECOND_BATTERY_CAPACITY)
         );
     }
 

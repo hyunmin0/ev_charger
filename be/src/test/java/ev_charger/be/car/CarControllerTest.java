@@ -1,5 +1,6 @@
 package ev_charger.be.car;
 
+import ev_charger.be.car.charge.ChargeRepository;
 import ev_charger.be.config.SecurityConfig;
 import ev_charger.be.security.CustomUserDetailsService;
 import ev_charger.be.security.JwtProvider;
@@ -41,9 +42,13 @@ class CarControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    // CarController는 서비스 없이 CarRepository를 직접 사용
+    // CarController는 서비스 없이 리포지토리를 직접 사용
     @MockitoBean
     private CarRepository carRepository;
+
+    // 충전 시간 조회(/cars/{carId}/charges)에서 사용
+    @MockitoBean
+    private ChargeRepository chargeRepository;
 
     @MockitoBean
     private JwtProvider jwtProvider;
