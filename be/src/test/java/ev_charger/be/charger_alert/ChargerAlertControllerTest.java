@@ -36,7 +36,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         }
 )
 @Import(SecurityConfig.class)
-// 컨트롤러의 @Value("${internal.secret-key}")에 테스트용 키를 주입
+// 서버가 알고 있는 키 설정
+// 컨트롤러의 @Value("${internal.secret-key}")에 테스트용 키(INTERNAL_SECRET_KEY)를 주입
+// (실제 서버에서는 설정 파일의 internal.secret-key 값을 사용)
 @TestPropertySource(properties = "internal.secret-key=" + ChargerAlertControllerTest.INTERNAL_SECRET_KEY)
 class ChargerAlertControllerTest {
 
@@ -111,36 +113,56 @@ class ChargerAlertControllerTest {
     @Test
     void 알림_발송_요청시_충전기_목록이_비어있어도_200을_반환한다() throws Exception {
         // given
+        List<ChargerStatusRequest> emptyRequests = List.of();
 
         // when
+        mockMvc.perform(post("/internal/charger-alerts/notify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(emptyRequests))
+                        .header(INTERNAL_KEY_HEADER, INTERNAL_SECRET_KEY))
 
         // then
+                .andExpect(status().isOk());
+
+        verify(chargerAlertService).notifyWaitingChargers(emptyRequests);
     }
 
     @Test
     void 알림_발송_요청시_내부_키가_틀리면_403을_반환하고_알림을_발송하지_않는다() throws Exception {
-        // given
-
         // when
+        mockMvc.perform(post("/internal/charger-alerts/notify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(chargerStatusRequests))
+                        .header(INTERNAL_KEY_HEADER, INVALID_INTERNAL_KEY))
 
-        // then
+                // then
+                .andExpect(status().isForbidden());
+
+        verify(chargerAlertService, never()).notifyWaitingChargers(chargerStatusRequests);
     }
 
     @Test
     void 알림_발송_요청시_내부_키_헤더가_없으면_400을_반환한다() throws Exception {
-        // given
-
         // when
+        mockMvc.perform(post("/internal/charger-alerts/notify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(chargerStatusRequests)))
 
-        // then
+                // then
+                .andExpect(status().isBadRequest());
+
+        verify(chargerAlertService, never()).notifyWaitingChargers(any());
     }
 
     @Test
     void 알림_발송_요청시_요청_본문이_없으면_400을_반환한다() throws Exception {
-        // given
-
         // when
+        mockMvc.perform(post("/internal/charger-alerts/notify")
+                        .header(INTERNAL_KEY_HEADER, INTERNAL_SECRET_KEY))
 
-        // then
+                // then
+                .andExpect(status().isBadRequest());
+
+        verify(chargerAlertService, never()).notifyWaitingChargers(any());
     }
 }
