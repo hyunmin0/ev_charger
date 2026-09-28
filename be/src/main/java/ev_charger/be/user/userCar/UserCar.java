@@ -9,7 +9,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.util.UUID;
 
 @Entity
 @Table(name="user_car",
@@ -19,8 +18,9 @@ import java.util.UUID;
 @NoArgsConstructor(access=AccessLevel.PROTECTED)
 public class UserCar {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID userCarId;
+    @Column(name="user_car_id")
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long userCarId;
 
     @JoinColumn(name="user_id", nullable = false)
     @ManyToOne(fetch=FetchType.LAZY)
@@ -30,7 +30,7 @@ public class UserCar {
     @ManyToOne(fetch=FetchType.LAZY)
     private Car car;
 
-    @Column(name="batter_capacity", nullable = false)
+    @Column(name="battery_capacity", nullable = false)
     private Float batteryCapacity;
 
     @Builder

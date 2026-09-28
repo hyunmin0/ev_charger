@@ -16,7 +16,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -134,7 +133,7 @@ class UserCarServiceTest {
     @Test
     void 차량_목록_조회_성공() {
         // given
-        UUID userCarId = UUID.randomUUID();
+        Long userCarId = 1L;
         Car car = mock(Car.class);
         given(car.getDisplayName()).willReturn("현대 아이오닉5");
 
@@ -159,7 +158,7 @@ class UserCarServiceTest {
     @Test
     void 차량_삭제_성공() {
         // given
-        UUID userCarId = UUID.randomUUID();
+        Long userCarId = 1L;
         UserCar userCar = mock(UserCar.class);
 
         given(userCarRepository.findByUserAndUserCarId(user, userCarId)).willReturn(Optional.of(userCar));
@@ -174,7 +173,7 @@ class UserCarServiceTest {
     @Test
     void 존재하지_않거나_본인_차량이_아니면_삭제시_예외_발생() {
         // given
-        UUID userCarId = UUID.randomUUID();
+        Long userCarId = 1L;
 
         given(userCarRepository.findByUserAndUserCarId(user, userCarId)).willReturn(Optional.empty());
 

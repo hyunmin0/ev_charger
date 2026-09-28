@@ -8,7 +8,6 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/user/cars")
@@ -44,7 +43,7 @@ public class UserCarController {
     @DeleteMapping("/{userCarId}")
     public ResponseEntity<Void> deleteUserCar(
             @AuthenticationPrincipal CustomUserDetails userDetails, // 로그인한 유저
-            @PathVariable UUID userCarId) {                         // URL에서 차량 id 받음음
+            @PathVariable Long userCarId) {                         // URL에서 차량 id 받음음
         userCarService.deleteUserCar(userDetails.getUser(), userCarId);
         return ResponseEntity.ok().build();
     }

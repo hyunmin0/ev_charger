@@ -1,9 +1,8 @@
 package ev_charger.be.user.userCar.dto.response;
 
-import java.util.UUID;
 
 public record UserCarResponse(
-        UUID userCarId,
+        Long userCarId,
         long carId,
         String carName,
         float batteryCapacity
