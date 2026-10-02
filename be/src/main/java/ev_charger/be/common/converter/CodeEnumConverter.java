@@ -23,12 +23,14 @@ public abstract class CodeEnumConverter<T extends Enum<T> & CodeEnum> implements
     // Java -> DB
     @Override
     public String convertToDatabaseColumn(T attr) {
+        if (attr == null) return null; // nullable 컬럼(예: charger.method)
         return attr.getCode(); // ChgerType.DB_DEMO.getCode() = "01"
     }
 
     // DB -> Java
     @Override
     public T convertToEntityAttribute(String dbData) {
+        if (dbData == null) return null; // nullable 컬럼(예: charger.method)
         // getEnumConstants(): 해당 enum의 모든 값을 배열로 반환
         return Arrays.stream(enumClass.getEnumConstants())
                 .filter(e -> e.getCode().equals(dbData)) // "01"인 enum 찾기

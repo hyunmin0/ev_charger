@@ -8,6 +8,7 @@ import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -54,5 +55,22 @@ public class Charger {
     private String output;
     @Column(length = 10)
     private ChargingMethod method;
+
+    // 테스트/데이터 생성용
+    // station은 insertable = false라 statId(복합키)를 직접 채워야 insert 시 PK가 null이 안 됨
+    @Builder
+    public Charger(Station station, String chgerId, ChgerType chgerType, ChgerStat chgerStat,
+                   String statUpdDt, String lastTsdt, String lastTedt, String output, ChargingMethod method) {
+        this.station = station;
+        this.statId = station.getStatId();
+        this.chgerId = chgerId;
+        this.chgerType = chgerType;
+        this.chgerStat = chgerStat;
+        this.statUpdDt = statUpdDt;
+        this.lastTsdt = lastTsdt;
+        this.lastTedt = lastTedt;
+        this.output = output;
+        this.method = method;
+    }
 
 }
