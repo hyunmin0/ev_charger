@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "fe",
+    "slug": "fe",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.soyeonnnnn.fe",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.ev_charger"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-font",
+      "@react-native-google-signin/google-signin",
+      "expo-splash-screen",
+      "expo-status-bar"
+    ],
+    "scheme": "ev-charger",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "88d689ac-3d84-4d91-bccd-47103e127f84"
+      }
+    }
+  }
+}
