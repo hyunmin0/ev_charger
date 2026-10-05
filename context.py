@@ -2,6 +2,34 @@ from uuid import UUID
 from sqlalchemy import text
 from db import AsyncSessionLocal
 
+# 충전기 타입 코드(chgerType)가 어떤 커넥터로 이뤄졌는지 — 한국환경공단 OpenAPI 가이드 3.3 코드표 그대로
+# 08 'DC콤보(완속)'은 콤보 커넥터이므로 '콤보'로 취급. 11(DC콤보2)은 버스 전용이라 별도 커넥터로 둬서 승용차와 겹치지 않게 함
+_CONNECTORS_BY_CODE = {
+    "01": {"차데모"},
+    "02": {"AC완속"},
+    "03": {"차데모", "AC3상"},
+    "04": {"콤보"},
+    "05": {"차데모", "콤보"},
+    "06": {"차데모", "AC3상", "콤보"},
+    "07": {"AC3상"},
+    "08": {"콤보"},
+    "09": {"NACS"},
+    "10": {"콤보", "NACS"},
+    "11": {"콤보2(버스전용)"},
+}
+
+
+def expand_compatible_charger_types(car_codes: list[str]) -> list[str]:
+    # car_charger에는 차량이 쓰는 커넥터가 코드 하나(예: 콤보=04)로만 들어있다.
+    # 그런데 05·06·08·10 충전기에도 콤보 커넥터가 들어있어서 같은 차가 꽂을 수 있으므로,
+    # 차량 커넥터와 하나라도 겹치는 충전기 코드를 전부 돌려준다.
+    car_connectors = set().union(*(_CONNECTORS_BY_CODE.get(code, set()) for code in car_codes))
+    compatible = {code for code, connectors in _CONNECTORS_BY_CODE.items() if connectors & car_connectors}
+    # 코드표에 없는 값은 사라지지 않게 그대로 유지
+    compatible |= {code for code in car_codes if code not in _CONNECTORS_BY_CODE}
+    return sorted(compatible)
+
+
 # 매 채팅마다 실행
 # -> 약간 비효율적? 단순 pk 조회라서 빠르긴 할 듯 (캐시로 대체 가능 - 나중에 생각)
 
@@ -45,4 +73,7 @@ async def get_my_car(user_id: UUID, car_id: int | None) -> dict | None:
     if row is None:
         return None
 
-    return dict(row)
+    my_car = dict(row)
+    # 검색에 그대로 쓰일 값이라, 차량이 직접 쓰는 커넥터가 아니라 호환되는 충전기 코드 전체로 바꿔서 돌려줌
+    my_car["charger_types"] = expand_compatible_charger_types(my_car["charger_types"] or [])
+    return my_car
