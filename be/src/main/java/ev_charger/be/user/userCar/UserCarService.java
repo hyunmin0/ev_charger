@@ -9,7 +9,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -70,7 +69,7 @@ public class UserCarService {
      * @param userCarId
      */
     @Transactional
-    public void deleteUserCar(User user, UUID userCarId) {
+    public void deleteUserCar(User user, Long userCarId) {
         // 검증
         UserCar userCar = userCarRepository.findByUserAndUserCarId(user, userCarId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않거나 본인 차량이 아닙니다."));

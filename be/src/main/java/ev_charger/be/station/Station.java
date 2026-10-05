@@ -5,6 +5,8 @@ import ev_charger.be.station.enums.FloorType;
 import ev_charger.be.station.enums.Kind;
 import ev_charger.be.station.stationOperator.StationOperator;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.*;
 
 import org.locationtech.jts.geom.Point;
@@ -52,6 +54,7 @@ public class Station {
     private String kindDetail;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR) // table.sql: varchar(1)
     @Column(name = "parkingFree", length = 1)
     private YN parkingFree;
 
@@ -59,6 +62,7 @@ public class Station {
     private String note;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR) // table.sql: varchar(1)
     @Column(name = "limitYn", length = 1)
     private YN limitYn;
 

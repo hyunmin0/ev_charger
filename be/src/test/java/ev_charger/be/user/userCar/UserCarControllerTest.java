@@ -77,21 +77,19 @@ class UserCarControllerTest {
     private static final long INVALID_CAR_ID = 999L;
     // 0 이하의 배터리 용량
     private static final float INVALID_BATTERY_CAPACITY = 0f;
-    // long/float 파라미터에 문자열을 넣는 타입 불일치 케이스
+    // long/float 파라미터, Long PathVariable에 문자열을 넣는 타입 불일치 케이스
     private static final String NOT_NUMBER_VALUE = "abc";
 
     // 차량 목록 조회 응답에 들어갈 차량 정보
-    private static final UUID USER_CAR_ID = UUID.randomUUID();
+    private static final long USER_CAR_ID = 1L;
     private static final String CAR_NAME = "아이오닉 5";
-    private static final UUID SECOND_USER_CAR_ID = UUID.randomUUID();
+    private static final long SECOND_USER_CAR_ID = 2L;
     private static final long SECOND_CAR_ID = 2L;
     private static final String SECOND_CAR_NAME = "EV6";
     private static final float SECOND_BATTERY_CAPACITY = 84.0f;
 
     // 차량 삭제: 존재하지 않거나 본인 차량이 아닌 id
-    private static final UUID INVALID_USER_CAR_ID = UUID.randomUUID();
-    // UUID PathVariable에 UUID 형식이 아닌 값을 넣는 타입 불일치 케이스
-    private static final String NOT_UUID_USER_CAR_ID = "not-uuid";
+    private static final long INVALID_USER_CAR_ID = 999L;
 
     // 로그인한 유저
     private User user;
@@ -278,10 +276,10 @@ class UserCarControllerTest {
         // then
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(userCarResponses.size()))
-                .andExpect(jsonPath("$[0].userCarId").value(USER_CAR_ID.toString()))
+                .andExpect(jsonPath("$[0].userCarId").value(USER_CAR_ID))
                 .andExpect(jsonPath("$[0].carName").value(CAR_NAME))
                 .andExpect(jsonPath("$[0].batteryCapacity").value(BATTERY_CAPACITY))
-                .andExpect(jsonPath("$[1].userCarId").value(SECOND_USER_CAR_ID.toString()))
+                .andExpect(jsonPath("$[1].userCarId").value(SECOND_USER_CAR_ID))
                 .andExpect(jsonPath("$[1].carName").value(SECOND_CAR_NAME))
                 .andExpect(jsonPath("$[1].batteryCapacity").value(SECOND_BATTERY_CAPACITY));
 
@@ -321,7 +319,7 @@ class UserCarControllerTest {
     @Test
     void 차량_삭제_성공시_200을_반환한다() throws Exception {
         // when
-        mockMvc.perform(delete("/user/cars/{userCarId}", USER_CAR_ID.toString())
+        mockMvc.perform(delete("/user/cars/{userCarId}", USER_CAR_ID)
                 .with(authentication(auth)))
 
         // then
@@ -331,9 +329,9 @@ class UserCarControllerTest {
     }
 
     @Test
-    void 차량_삭제시_userCarId가_UUID_형식이_아니면_400을_반환한다() throws Exception {
+    void 차량_삭제시_userCarId가_숫자가_아니면_400을_반환한다() throws Exception {
         // when
-        mockMvc.perform(delete("/user/cars/{userCarId}", NOT_UUID_USER_CAR_ID)
+        mockMvc.perform(delete("/user/cars/{userCarId}", NOT_NUMBER_VALUE)
                         .with(authentication(auth)))
 
         // then
@@ -348,7 +346,7 @@ class UserCarControllerTest {
         willThrow(new IllegalArgumentException("존재하지 않거나 본인 차량이 아닙니다.")).given(userCarService).deleteUserCar(user, INVALID_USER_CAR_ID);
 
         // when
-        mockMvc.perform(delete("/user/cars/{userCarId}", INVALID_USER_CAR_ID.toString())
+        mockMvc.perform(delete("/user/cars/{userCarId}", INVALID_USER_CAR_ID)
                         .with(authentication(auth)))
 
         // then
@@ -361,7 +359,7 @@ class UserCarControllerTest {
     @Test
     void 차량_삭제시_인증_정보가_없으면_403을_반환한다() throws Exception {
         // when
-        mockMvc.perform(delete("/user/cars/{userCarId}", USER_CAR_ID.toString()))
+        mockMvc.perform(delete("/user/cars/{userCarId}", USER_CAR_ID))
 
                 // then
                 .andExpect(status().isForbidden());

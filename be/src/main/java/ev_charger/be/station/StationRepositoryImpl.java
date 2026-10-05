@@ -1,6 +1,6 @@
 package ev_charger.be.station;
 
-import ev_charger.be.station.congestion.CongestionLevel;
+import ev_charger.be.station.congestion.CongestionLevelConverter;
 import ev_charger.be.station.dto.request.MapBoundsRequest;
 import ev_charger.be.station.dto.request.NearbyStationRequest;
 import ev_charger.be.station.dto.response.StationResponse;
@@ -24,6 +24,9 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
     // jpa 기본 제공 객체: 직접 네이티브 쿼리를 실행
     private final EntityManager em;
 
+    // 네이티브 쿼리 결과의 혼잡도 문자열("여유" 등) -> CongestionLevel 변환용
+    private static final CongestionLevelConverter CONGESTION_LEVEL_CONVERTER = new CongestionLevelConverter();
+
     /**
      * 내 위치 기준 반경 내 충전소 조회
      * @param request 위경도, 반경, 필터
@@ -35,36 +38,40 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
 
         // 기본 select
         StringBuilder sql = new StringBuilder("""
-            select s.statId,
-                s.statNm,
+            select s."statId",
+                s."statNm",
                 s.addr,
                 ST_Y(s.location::geometry) lat,
                 ST_X(s.location::geometry) lng,
-                s.useTime,
-                s.parkingFree,
-                s.limitYn,
+                s."useTime",
+                s."parkingFree",
+                s."limitYn",
                 s.kind,
-                s.floorType,
-                count(c.chgerType) filter (where c.chgerType not in ('02', '07', '08')) > 0 hasFast,
-                so.busiNm,
-                count(c.chgerId) totalCount,
-                count(c.chgerId) filter (where c.stat = '2') availableCount,
-                count(c.chgerId) filter (where c.stat = '3') > 0 hasCharging,
-                count(c.chgerId) filter (where c.stat in ('0', '1', '9')) = count(c.chgerId) allUnknown,
-                count(c.chgerId) filter (where c.stat in ('4', '5', '6')) = count(c.chgerId) allUnavailable,
-                round(avg(r.rating)::numeric, 1) averageRating,
-                count(r.review_id) reviewCount,
+                s."floorType",
+                count(c."chgerType") filter (where c."chgerType" not in ('02', '07', '08')) > 0 "hasFast",
+                so."busiNm",
+                count(c."chgerId") "totalCount",
+                count(c."chgerId") filter (where c.stat = '2') "availableCount",
+                count(c."chgerId") filter (where c.stat = '3') > 0 "hasCharging",
+                count(c."chgerId") filter (where c.stat in ('0', '1', '9')) = count(c."chgerId") "allUnknown",
+                count(c."chgerId") filter (where c.stat in ('4', '5', '6')) = count(c."chgerId") "allUnavailable",
+                rv."averageRating", -- 리뷰 평균 (lateral 서브쿼리에서 미리 계산)
+                rv."reviewCount", -- 리뷰 개수 (충전기 수와 곱해지지 않도록 따로 계산)
                 ST_Distance(s.location, ST_MakePoint(:lng, :lat)::geography) distance, -- 충전소 위치와 현 위치의 거리
-                case when count(c.chgerId) filter (where c.stat in ('2', '3', '6')) = 0 then null else cg.congestionLevel end nextHourCongestionLevel -- 충전대기, 충전중, 예약중이 아니면 null
+                case when count(c."chgerId") filter (where c.stat in ('2', '3', '6')) = 0 then null else cg."congestionLevel" end "nextHourCongestionLevel" -- 충전대기, 충전중, 예약중이 아니면 null
             from station s
-                join charger c on s.statId = c.statId
-                join station_operator so on s.busiId = so.busiId
-                left join review r on r.statId = s.statId
+                join charger c on s."statId" = c."statId"
+                join station_operator so on s."busiId" = so."busiId"
+                left join lateral ( -- 리뷰는 충전소별로 먼저 집계 (charger와 같이 join하면 충전기 수 x 리뷰 수로 행이 늘어남)
+                    select round(avg(r.rating)::numeric, 1) "averageRating", count(*) "reviewCount"
+                    from review r
+                    where r."statId" = s."statId"
+                    ) rv on true -- 리뷰가 없어도 count 0, avg null인 1행이 나옴
                 left join lateral ( -- lateral join: 바깥 값 참조 가능, 바깥 테이블의 각 행마다 재실행
-                    select cg.congestionLevel
+                    select cg."congestionLevel"
                     from congestion cg
-                    where cg.statId = s.statId and cg.targetTime = 1
-                    order by cg.predictedAt desc
+                    where cg."statId" = s."statId" and cg."targetTime" = 1
+                    order by cg."predictedAt" desc
                     limit 1
                     ) cg on true -- 조인 조건이 없음을 의미
             where ST_DWithin(s.location, ST_MakePoint(:lng, :lat)::geography, :range) -- range(반경) 안에 존재하는 경우
@@ -106,36 +113,40 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
     public List<StationResponse> findStationsInBoundsWithFilter(MapBoundsRequest request) {
 
         StringBuilder sql = new StringBuilder("""
-            select s.statId,
-            s.statNm,
+            select s."statId",
+            s."statNm",
             s.addr,
             ST_Y(s.location::geometry) lat,
             ST_X(s.location::geometry) lng,
-            s.useTime,
-            s.parkingFree,
-            s.limitYn,
+            s."useTime",
+            s."parkingFree",
+            s."limitYn",
             s.kind,
-            s.floorType,
-            count(c.chgerType) filter (where c.chgerType not in ('02', '07', '08')) > 0 hasFast,
-            so.busiNm,
-            count(c.chgerId) totalCount,
-            count(c.chgerId) filter (where c.stat = '2') availableCount,
-            count(c.chgerId) filter (where c.stat = '3') > 0 hasCharging,
-            count(c.chgerId) filter (where c.stat in ('0', '1', '9')) = count(c.chgerId) allUnknown,
-            count(c.chgerId) filter (where c.stat in ('4', '5', '6')) = count(c.chgerId) allUnavailable,
-            round(avg(r.rating)::numeric, 1) averageRating,
-            count(r.review_id) reviewCount,
+            s."floorType",
+            count(c."chgerType") filter (where c."chgerType" not in ('02', '07', '08')) > 0 "hasFast",
+            so."busiNm",
+            count(c."chgerId") "totalCount",
+            count(c."chgerId") filter (where c.stat = '2') "availableCount",
+            count(c."chgerId") filter (where c.stat = '3') > 0 "hasCharging",
+            count(c."chgerId") filter (where c.stat in ('0', '1', '9')) = count(c."chgerId") "allUnknown",
+            count(c."chgerId") filter (where c.stat in ('4', '5', '6')) = count(c."chgerId") "allUnavailable",
+            rv."averageRating", -- 리뷰 평균 (lateral 서브쿼리에서 미리 계산)
+            rv."reviewCount", -- 리뷰 개수 (충전기 수와 곱해지지 않도록 따로 계산)
             ST_Distance(s.location, ST_MakePoint(:userLng, :userLat)::geography) distance, -- 충전소 위치와 현 위치의 거리
-            case when count(c.chgerId) filter (where c.stat in ('2', '3', '6')) = 0 then null else cg.congestionLevel end nextHourCongestionLevel -- 충전대기, 충전중, 예약중이 아니면 null
+            case when count(c."chgerId") filter (where c.stat in ('2', '3', '6')) = 0 then null else cg."congestionLevel" end "nextHourCongestionLevel" -- 충전대기, 충전중, 예약중이 아니면 null
             from station s
-                join charger c on s.statId = c.statId
-                join station_operator so on s.busiId = so.busiId
-                left join review r on r.statId = s.statId
+                join charger c on s."statId" = c."statId"
+                join station_operator so on s."busiId" = so."busiId"
+                left join lateral ( -- 리뷰는 충전소별로 먼저 집계 (charger와 같이 join하면 충전기 수 x 리뷰 수로 행이 늘어남)
+                    select round(avg(r.rating)::numeric, 1) "averageRating", count(*) "reviewCount"
+                    from review r
+                    where r."statId" = s."statId"
+                    ) rv on true -- 리뷰가 없어도 count 0, avg null인 1행이 나옴
                 left join lateral ( -- lateral join: 바깥 값 참조 가능, 바깥 테이블의 각 행마다 재실행
-                    select cg.congestionLevel
+                    select cg."congestionLevel"
                     from congestion cg
-                    where cg.statId = s.statId and cg.targetTime = 1
-                    order by cg.predictedAt desc
+                    where cg."statId" = s."statId" and cg."targetTime" = 1
+                    order by cg."predictedAt" desc
                     limit 1
                     ) cg on true -- 조인 조건이 없음을 의미
             where ST_Within(s.location::geometry, ST_MakeEnvelope(:minLng, :minLat, :maxLng, :maxLat, 4326)) -- 위경도 최대최소 안에 존재하는 경우
@@ -164,41 +175,45 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
     @Override
     public List<StationResponse> findFavoriteStations(UUID userId, double lat, double lng) {
         String sql = """
-            select s.statId,
-            s.statNm,
+            select s."statId",
+            s."statNm",
             s.addr,
             ST_Y(s.location::geometry) lat,
             ST_X(s.location::geometry) lng,
-            s.useTime,
-            s.parkingFree,
-            s.limitYn,
+            s."useTime",
+            s."parkingFree",
+            s."limitYn",
             s.kind,
-            s.floorType,
-            count(c.chgerType) filter (where c.chgerType not in ('02', '07', '08')) > 0 hasFast,
-            so.busiNm,
-            count(c.chgerId) totalCount,
-            count(c.chgerId) filter (where c.stat = '2') availableCount,
-            count(c.chgerId) filter (where c.stat = '3') > 0 hasCharging,
-            count(c.chgerId) filter (where c.stat in ('0', '1', '9')) = count(c.chgerId) allUnknown,
-            count(c.chgerId) filter (where c.stat in ('4', '5', '6')) = count(c.chgerId) allUnavailable,
-            round(avg(r.rating)::numeric, 1) averageRating,
-            count(r.review_id) reviewCount,
+            s."floorType",
+            count(c."chgerType") filter (where c."chgerType" not in ('02', '07', '08')) > 0 "hasFast",
+            so."busiNm",
+            count(c."chgerId") "totalCount",
+            count(c."chgerId") filter (where c.stat = '2') "availableCount",
+            count(c."chgerId") filter (where c.stat = '3') > 0 "hasCharging",
+            count(c."chgerId") filter (where c.stat in ('0', '1', '9')) = count(c."chgerId") "allUnknown",
+            count(c."chgerId") filter (where c.stat in ('4', '5', '6')) = count(c."chgerId") "allUnavailable",
+            rv."averageRating", -- 리뷰 평균 (lateral 서브쿼리에서 미리 계산)
+            rv."reviewCount", -- 리뷰 개수 (충전기 수와 곱해지지 않도록 따로 계산)
             ST_Distance(s.location, ST_MakePoint(:userLng, :userLat)::geography) distance, -- 충전소 위치와 현 위치의 거리
-            case when count(c.chgerId) filter (where c.stat in ('2', '3', '6')) = 0 then null else cg.congestionLevel end nextHourCongestionLevel -- 충전대기, 충전중, 예약중이 아니면 null
+            case when count(c."chgerId") filter (where c.stat in ('2', '3', '6')) = 0 then null else cg."congestionLevel" end "nextHourCongestionLevel" -- 충전대기, 충전중, 예약중이 아니면 null
             from station s
-                join charger c on s.statId = c.statId
-                join station_operator so on s.busiId = so.busiId
-                join favorite f on f.statId = s.statId
-                left join review r on r.statId = s.statId
+                join charger c on s."statId" = c."statId"
+                join station_operator so on s."busiId" = so."busiId"
+                join favorite f on f."statId" = s."statId"
+                left join lateral ( -- 리뷰는 충전소별로 먼저 집계 (charger와 같이 join하면 충전기 수 x 리뷰 수로 행이 늘어남)
+                    select round(avg(r.rating)::numeric, 1) "averageRating", count(*) "reviewCount"
+                    from review r
+                    where r."statId" = s."statId"
+                    ) rv on true -- 리뷰가 없어도 count 0, avg null인 1행이 나옴
                 left join lateral ( -- lateral join: 바깥 값 참조 가능, 바깥 테이블의 각 행마다 재실행
-                    select cg.congestionLevel
+                    select cg."congestionLevel"
                     from congestion cg
-                    where cg.statId = s.statId and cg.targetTime = 1
-                    order by cg.predictedAt desc
+                    where cg."statId" = s."statId" and cg."targetTime" = 1
+                    order by cg."predictedAt" desc
                     limit 1
                     ) cg on true -- 조인 조건이 없음을 의미
             where f.user_id = :userId
-            group by s.statId, s.statNm, s.addr, s.location, s.useTime, s.parkingFree, s.limitYn, s.kind, s.floorType, so.busiNm, cg.congestionLevel
+            group by s."statId", s."statNm", s.addr, s.location, s."useTime", s."parkingFree", s."limitYn", s.kind, s."floorType", so."busiNm", cg."congestionLevel", rv."averageRating", rv."reviewCount", f.created_at
             order by f.created_at desc
             """;
 
@@ -221,13 +236,18 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
      * 네이티브 쿼리 결과(Tuple) -> StationResponse 변환
      * Number로 받는 이유: 정수형은 db에서 bigint, numeric으로 올 수 있어서 Integer.class로 바로 받으면 예외날 수 있음. -> Number로 받고 .intValue()로 변환
      * Double은 db의 float8이나 double precision이랑 타입이 맞아서 바로 받아도 됨
+     * averageRating은 round(...::numeric)라 BigDecimal로 옴 -> Number로 받고 .doubleValue()로 변환
+     * parkingFree, limitYn은 길이 1 문자열이라 Character로 옴 -> Object로 받고 문자열로 변환
+     * nextHourCongestionLevel은 db 값("여유" 등)이 문자열로 옴 -> converter로 enum 변환
      * List<?>: 타입을 모르는 리스트를 받을 때 쓰는 와일드카드(Tuple로 받으면 경고)
      */
     private List<StationResponse> toResponse(List<?> rows) {
         return rows.stream().map(r -> {
             Tuple row = (Tuple) r;
-            String parkingFree = row.get("parkingFree", String.class);
-            String limitYn = row.get("limitYn", String.class);
+            String parkingFree = toStringOrNull(row.get("parkingFree"));
+            String limitYn = toStringOrNull(row.get("limitYn"));
+            Number averageRating = row.get("averageRating", Number.class);
+            String congestionLevel = row.get("nextHourCongestionLevel", String.class);
             return new StationResponse(
                     row.get("statId", String.class),
                     row.get("statNm", String.class),
@@ -246,12 +266,19 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
                     row.get("hasCharging", Boolean.class),
                     row.get("allUnknown", Boolean.class),
                     row.get("allUnavailable", Boolean.class),
-                    row.get("averageRating", Double.class),
+                    averageRating != null ? averageRating.doubleValue() : null,
                     row.get("reviewCount", Number.class).intValue(),
                     row.get("distance", Double.class),
-                    row.get("nextHourCongestionLevel", CongestionLevel.class)
+                    congestionLevel != null ? CONGESTION_LEVEL_CONVERTER.convertToEntityAttribute(congestionLevel) : null
             );
         }).toList();
+    }
+
+    /**
+     * Character, String 등 문자 타입 값을 String으로 변환 (null이면 null)
+     */
+    private String toStringOrNull(Object value) {
+        return value != null ? value.toString() : null;
     }
 
     /**
@@ -261,25 +288,25 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
     private void appendFilterWithGroupBy(StringBuilder sql, StationFilter filter) {
         // station 조건
         // Boolean.TRUE.equals: true일 때만 조건 추가 (null, false면 조건 없음)
-        if (Boolean.TRUE.equals(filter.parkingFree())) sql.append(" AND s.parkingFree = 'Y'\n");
-        if (Boolean.TRUE.equals(filter.limitYn())) sql.append(" AND s.limitYn = 'N'\n");
+        if (Boolean.TRUE.equals(filter.parkingFree())) sql.append(" AND s.\"parkingFree\" = 'Y'\n");
+        if (Boolean.TRUE.equals(filter.limitYn())) sql.append(" AND s.\"limitYn\" = 'N'\n");
         // NUMERIC으로 변환 후 비교
         // NUMERIC: 소수점 포함 순자 타입
         if (filter.minOutput() != null) sql.append(" AND CAST(c.output AS NUMERIC) >= :minOutput\n");
         if (filter.maxOutput() != null) sql.append(" AND CAST(c.output AS NUMERIC) <= :maxOutput\n");
 
         // charger 조건
-        if (hasValues(filter.chgerTypes())) sql.append(" AND c.chgerType IN (:chgerTypes)\n");
+        if (hasValues(filter.chgerTypes())) sql.append(" AND c.\"chgerType\" IN (:chgerTypes)\n");
         if (hasValues(filter.kinds())) sql.append(" AND s.kind IN (:kinds)\n");
-        if (hasValues(filter.floorTypes())) sql.append(" AND s.floorType IN (:floorTypes)\n");
+        if (hasValues(filter.floorTypes())) sql.append(" AND s.\"floorType\" IN (:floorTypes)\n");
 
         // 집계
         sql.append("""
-            group by s.statId, s.statNm, s.addr, s.location, s.useTime, s.parkingFree, s.limitYn, s.kind, s.floorType, so.busiNm, cg.congestionLevel
+            group by s."statId", s."statNm", s.addr, s.location, s."useTime", s."parkingFree", s."limitYn", s.kind, s."floorType", so."busiNm", cg."congestionLevel", rv."averageRating", rv."reviewCount"
             """);
 
         // availableOnly = true면 사용 가능한 충전기(stat='2')가 1개 이상인 충전소만 반환
-        if (Boolean.TRUE.equals(filter.availableOnly())) sql.append(" having count(c.chgerId) filter (where c.stat = '2') > 0 -- availableOnly = false면 전체 조회, true면 충전 가능한 충전소만 조회\n");
+        if (Boolean.TRUE.equals(filter.availableOnly())) sql.append(" having count(c.\"chgerId\") filter (where c.stat = '2') > 0 -- availableOnly = false면 전체 조회, true면 충전 가능한 충전소만 조회\n");
 
         // 정렬
         sql.append(" order by distance -- 거리순");

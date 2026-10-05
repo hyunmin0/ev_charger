@@ -32,7 +32,7 @@ public class Favorite {
     private Station station;
 
     @CreatedDate
-    @Column(name = "create_at", nullable = false, updatable = false) // 수정을 막기 위해
+    @Column(name = "created_at", nullable = false, updatable = false) // 수정을 막기 위해
     private LocalDateTime createdAt;
 
     @Builder

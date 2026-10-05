@@ -2,6 +2,8 @@ package ev_charger.be.car.carCharger;
 
 import ev_charger.be.car.enums.AtomicChargerType;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -26,6 +28,7 @@ public class CarCharger {
     @Column(name="model_year", nullable = false)
     private int modelYear;
 
+    @JdbcTypeCode(SqlTypes.CHAR) // table.sql: char(2)
     @Column(name="charger_type", nullable = false, length = 2)
     private AtomicChargerType chargerType;
 
