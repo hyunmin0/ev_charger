@@ -69,3 +69,33 @@ out/
 # =========================
 .DS_Store
 Thumbs.db
+
+# 환경변수 / 시크릿
+.env
+*.env.local
+application.yml
+application-*.yml
+firebase-service-account.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 로그
+*.log
+logs/
+
+# OS / 에디터
+.DS_Store
+.vscode/
+.idea/
+
+# Claude / Claude Code 관련
+.claude/
+CLAUDE.md
+.claudeignore
+.mcp.json
+docs/
