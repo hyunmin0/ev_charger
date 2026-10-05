@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, Modal, ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView, WebViewNavigation } from "react-native-webview";
-import { GoogleSignin } from "@react-native-google-signin/google-signin";
+// import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -29,9 +29,9 @@ export default function LoginScreen() {
   const [oauthUrl, setOauthUrl] = useState<string | null>(null);
   const [webLoading, setWebLoading] = useState(false);
 
-  useEffect(() => {
-    GoogleSignin.configure({ webClientId: GOOGLE_WEB_CLIENT_ID });
-  }, []);
+  // useEffect(() => {
+  //   GoogleSignin.configure({ webClientId: GOOGLE_WEB_CLIENT_ID });
+  // }, []);
 
   const handleNavChange = async (nav: WebViewNavigation) => {
     const url = nav.url;
@@ -54,20 +54,19 @@ export default function LoginScreen() {
   };
 
   const handleGoogleLogin = async () => {
-    try {
-      await GoogleSignin.hasPlayServices();
-      await GoogleSignin.signOut();
-      await GoogleSignin.signIn();
-      const { accessToken } = await GoogleSignin.getTokens();
-
-      const loginRes = await fetch(
-        `${BACKEND_URL}/auth/login?accessToken=${accessToken}&provider=GOOGLE`,
-        { method: "POST" }
-      );
-      await handleLoginResponse(loginRes);
-    } catch (e) {
-      console.error("OAuth error", e);
-    }
+    // try {
+    //   await GoogleSignin.hasPlayServices();
+    //   await GoogleSignin.signOut();
+    //   await GoogleSignin.signIn();
+    //   const { accessToken } = await GoogleSignin.getTokens();
+    //   const loginRes = await fetch(
+    //     `${BACKEND_URL}/auth/login?accessToken=${accessToken}&provider=GOOGLE`,
+    //     { method: "POST" }
+    //   );
+    //   await handleLoginResponse(loginRes);
+    // } catch (e) {
+    //   console.error("OAuth error", e);
+    // }
   };
 
   const handleLoginResponse = async (res: Response) => {
@@ -184,7 +183,7 @@ const S = StyleSheet.create({
   wvClose: { padding: 10, width: 44 },
   wvTitle: { fontSize: 16, fontWeight: "700", color: "#111" },
   wvLoader: {
-    ...StyleSheet.absoluteFillObject,
+    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
     alignItems: "center", justifyContent: "center", backgroundColor: "#fff", zIndex: 1,
   },
 });

@@ -35,18 +35,21 @@ export default function MyReviewsScreen() {
   const [editRating, setEditRating] = useState(5);
   const [editContent, setEditContent] = useState("");
   const [editSubmitting, setEditSubmitting] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
 
   const fetchReviews = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await api.get("/reviews/my");
-      setReviews(res.data ?? []);
-    } catch {
-      setReviews([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  setLoading(true);
+  setFetchError(false);
+  try {
+    const res = await api.get("/reviews/my");
+    setReviews(res.data ?? []);
+  } catch {
+    setFetchError(true);
+    setReviews([]);
+  } finally {
+    setLoading(false);
+  }
+}, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -161,11 +164,17 @@ export default function MyReviewsScreen() {
           renderItem={renderItem}
           contentContainerStyle={styles.scroll}
           ListEmptyComponent={
-            <View style={styles.empty}>
-              <Ionicons name="chatbubble-outline" size={48} color="#ddd" />
-              <Text style={styles.emptyTxt}>작성한 리뷰가 없어요</Text>
-            </View>
-          }
+  <View style={styles.empty}>
+    <Ionicons
+      name={fetchError ? "cloud-offline-outline" : "chatbubble-outline"}
+      size={48}
+      color="#ddd"
+    />
+    <Text style={styles.emptyTxt}>
+      {fetchError ? "불러오지 못했어요" : "작성한 리뷰가 없어요"}
+    </Text>
+  </View>
+}
         />
       )}
 

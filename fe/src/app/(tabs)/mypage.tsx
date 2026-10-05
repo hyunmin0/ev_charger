@@ -25,6 +25,7 @@ type Profile = {
 export default function MypageScreen() {
   const [token, setToken] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [profileError, setProfileError] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -32,14 +33,17 @@ export default function MypageScreen() {
         const t = await AsyncStorage.getItem("jwt_token");
         setToken(t);
         if (t) {
+          setProfileError(false);
           try {
             const res = await api.get("/user/profile");
             setProfile(res.data);
           } catch {
             setProfile(null);
+            setProfileError(true);
           }
         } else {
           setProfile(null);
+          setProfileError(false);
         }
       })();
     }, [])
@@ -116,6 +120,12 @@ export default function MypageScreen() {
             </View>
             <Ionicons name="chevron-forward" size={18} color="#ccc" />
           </TouchableOpacity>
+        )}
+
+        {token && profileError && (
+          <View style={{ alignItems: "center", paddingVertical: 8 }}>
+            <Text style={{ fontSize: 13, color: "#aaa" }}>프로필을 불러오지 못했어요</Text>
+          </View>
         )}
 
         {/* 메뉴 카드 */}

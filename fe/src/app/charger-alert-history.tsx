@@ -31,18 +31,23 @@ export default function ChargerAlertHistoryScreen() {
   const router = useRouter();
   const [history, setHistory] = useState<AlertHistory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
 
-  const fetchHistory = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await api.get<AlertHistory[]>("/notifications");
-      setHistory(res.data ?? []);
-    } catch {
-      setHistory([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+
+const fetchHistory = useCallback(async () => {
+  setLoading(true);
+  setFetchError(false);
+  try {
+    const res = await api.get<AlertHistory[]>("/notifications");
+    setHistory(res.data ?? []);
+  } catch {
+    setFetchError(true);
+    setHistory([]);
+  } finally {
+    setLoading(false);
+  }
+}, []);
+
 
   useFocusEffect(useCallback(() => { fetchHistory(); }, [fetchHistory]));
 
@@ -113,11 +118,18 @@ export default function ChargerAlertHistoryScreen() {
           ItemSeparatorComponent={() => <View style={S.separator} />}
           contentContainerStyle={S.listContent}
           ListEmptyComponent={
-            <View style={S.empty}>
-              <Ionicons name="notifications-outline" size={48} color="#ddd" />
-              <Text style={S.emptyTxt}>알림 기록이 없어요</Text>
-            </View>
-          }
+  <View style={S.empty}>
+    <Ionicons
+      name={fetchError ? "cloud-offline-outline" : "notifications-outline"}
+      size={48}
+      color="#ddd"
+    />
+    <Text style={S.emptyTxt}>
+      {fetchError ? "불러오지 못했어요" : "알림 기록이 없어요"}
+    </Text>
+  </View>
+}
+
         />
       )}
     </SafeAreaView>

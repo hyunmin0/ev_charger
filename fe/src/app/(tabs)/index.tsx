@@ -70,7 +70,7 @@ const mapHTML = `<!DOCTYPE html><html><head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>* { margin:0; padding:0; } html,body,#map { width:100%; height:100%; }</style>
 </head><body><div id="map"></div>
-<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=c8ed16f7d0f7208cec6b025168773f5e&autoload=false"></script>
+<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_API_KEY}&autoload=false"></script>
 <script>kakao.maps.load(function() {
   var map = new kakao.maps.Map(document.getElementById('map'), {
     center: new kakao.maps.LatLng(37.5665, 126.9780), level: 5
@@ -131,6 +131,7 @@ export default function HomeScreen() {
   const [stations, setStations] = useState<Station[]>([]);
   const [stationsLoading, setStationsLoading] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState(false);
   const userLat = useRef(35.1595);
   const userLng = useRef(126.8526);
 
@@ -144,6 +145,7 @@ export default function HomeScreen() {
 
   const fetchStations = useCallback(async (cursor?: string | null) => {
     setStationsLoading(true);
+    if (!cursor) setFetchError(false);
     try {
       const res = await api.get("/stations/nearby", {
         params: {
@@ -162,7 +164,10 @@ export default function HomeScreen() {
       }
       setNextCursor(data.nextCursor ?? null);
     } catch {
-      if (!cursor) setStations([]);
+      if (!cursor) {
+        setFetchError(true);
+        setStations([]);
+      }
     } finally {
       setStationsLoading(false);
     }
@@ -183,6 +188,7 @@ export default function HomeScreen() {
   useEffect(() => {
     fetchStations();
   }, [radiusIdx, available]);
+
   const [speedMin, setSpeedMin] = useState(1);
   const [speedMax, setSpeedMax] = useState(3);
   const [selTypes, setSelTypes] = useState<string[]>([]);
@@ -245,10 +251,17 @@ export default function HomeScreen() {
     return id;
   };
 
-  const isActive = (id: string): boolean =>
-    ({ available, parking: freeParking, open: openOnly,
-       type: selTypes.length > 0, facility: selFacilities.length > 0,
-       floor: selFloor.length > 0 }[id] ?? false);
+  const isActive = (id: string): boolean => {
+    const map: Record<string, boolean> = {
+      available,
+      parking: freeParking,
+      open: openOnly,
+      type: selTypes.length > 0,
+      facility: selFacilities.length > 0,
+      floor: selFloor.length > 0,
+    };
+    return map[id] ?? false;
+  };
 
   const renderStation = ({ item }: { item: Station }) => {
     const tags = stationTags(item);
@@ -389,8 +402,10 @@ export default function HomeScreen() {
           ListFooterComponent={stationsLoading ? <ActivityIndicator style={{ padding: 16 }} color={ACCENT} /> : null}
           ListEmptyComponent={
             !stationsLoading ? (
-              <View style={{ alignItems: "center", paddingTop: 40 }}>
-                <Text style={{ color: "#aaa", fontSize: 14 }}>주변 충전소가 없어요</Text>
+              <View style={{ alignItems: "center", paddingTop: 40, gap: 8 }}>
+                <Text style={{ color: "#aaa", fontSize: 14 }}>
+                  {fetchError ? "불러오지 못했어요" : "주변 충전소가 없어요"}
+                </Text>
               </View>
             ) : null
           }
@@ -514,7 +529,7 @@ const S = StyleSheet.create({
   predBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
   predTxt: { fontSize: 12, fontWeight: "600" },
 
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.3)" },
+  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.3)" },
   sheet: { position: "absolute", bottom: 0, left: 0, right: 0, height: SHEET_HEIGHT, backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: SHEET_PAD },
   handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#ddd", alignSelf: "center", marginTop: 12 },
   sheetTitle: { fontSize: 17, fontWeight: "700", color: "#111", textAlign: "center", paddingVertical: 14 },

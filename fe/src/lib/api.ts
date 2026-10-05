@@ -71,6 +71,11 @@ api.interceptors.response.use(
       }
     }
 
+    console.error(
+      `[API Error] ${error.config?.method?.toUpperCase()} ${error.config?.url}`,
+      `status: ${error.response?.status}`,
+      error.response?.data ?? error.message
+    );
     return Promise.reject(error);
   }
 );

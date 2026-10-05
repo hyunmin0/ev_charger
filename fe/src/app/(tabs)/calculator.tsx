@@ -31,9 +31,9 @@ const CHARGERS = [
 
 // 충전기 타입별 기준 SOC 구간 (%)
 const REF_RANGE: Record<string, { fromSoc: number; toSoc: number }> = {
-  "완속":   { fromSoc: 10, toSoc: 100 }, // 기준% = 90
-  "급속":   { fromSoc: 10, toSoc: 80  }, // 기준% = 70
-  "휴대용": { fromSoc: 10, toSoc: 100 }, // 기준% = 90
+  "완속":   { fromSoc: 10, toSoc: 80 }, // 기준% = 80
+  "급속":   { fromSoc: 10, toSoc: 80  }, // 기준% = 80
+  "휴대용": { fromSoc: 10, toSoc: 80 }, // 기준% = 80
 };
 
 type CarOption = { label: string; capacity: number; isMine?: boolean; carId?: number };
@@ -159,7 +159,7 @@ export default function CalculatorScreen() {
   // targetMax: 급속은 80%, 완속/휴대용은 100%
   const currentChargerType = isRefMode ? (selectedRef?.chargerType ?? "완속") : charger.type;
   const isFast = currentChargerType === "급속";
-  const targetMax = isFast ? 80 : 100;
+  const targetMax = 80;
 
   const calculate = () => {
     const capacity = carOptions.find(c => c.label === car)?.capacity ?? 64;

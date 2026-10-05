@@ -44,25 +44,28 @@ export default function FavoritesScreen() {
   const router = useRouter();
   const [stations, setStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
 
-  const fetchFavorites = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      let lat = 35.1595, lng = 126.8526; // 광주 기본값
-      if (status === "granted") {
-        const loc = await Location.getCurrentPositionAsync({});
-        lat = loc.coords.latitude;
-        lng = loc.coords.longitude;
-      }
-      const res = await api.get("/favorites", { params: { lat, lng } });
-      setStations(res.data ?? []);
-    } catch {
-      setStations([]);
-    } finally {
-      setLoading(false);
+ const fetchFavorites = useCallback(async () => {
+  setLoading(true);
+  setFetchError(false);
+  try {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    let lat = 35.1595, lng = 126.8526;
+    if (status === "granted") {
+      const loc = await Location.getCurrentPositionAsync({});
+      lat = loc.coords.latitude;
+      lng = loc.coords.longitude;
     }
-  }, []);
+    const res = await api.get("/favorites", { params: { lat, lng } });
+    setStations(res.data ?? []);
+  } catch {
+    setFetchError(true);
+    setStations([]);
+  } finally {
+    setLoading(false);
+  }
+}, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -161,11 +164,17 @@ export default function FavoritesScreen() {
           contentContainerStyle={S.listContent}
           ItemSeparatorComponent={() => <View style={S.separator} />}
           ListEmptyComponent={
-            <View style={S.empty}>
-              <Ionicons name="star-outline" size={48} color="#ddd" />
-              <Text style={S.emptyTxt}>즐겨찾기한 충전소가 없어요</Text>
-            </View>
-          }
+  <View style={S.empty}>
+    <Ionicons
+      name={fetchError ? "cloud-offline-outline" : "star-outline"}
+      size={48}
+      color="#ddd"
+    />
+    <Text style={S.emptyTxt}>
+      {fetchError ? "불러오지 못했어요" : "즐겨찾기한 충전소가 없어요"}
+    </Text>
+  </View>
+}
         />
       )}
     </SafeAreaView>
