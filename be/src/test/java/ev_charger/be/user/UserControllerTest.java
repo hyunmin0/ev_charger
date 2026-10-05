@@ -162,12 +162,12 @@ class UserControllerTest {
     }
 
     @Test
-    void 프로필_조회시_인증_정보가_없으면_403을_반환한다() throws Exception {
+    void 프로필_조회시_인증_정보가_없으면_401을_반환한다() throws Exception {
         // when
         mockMvc.perform(get("/user/profile"))
 
                 // then
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(userService, never()).getProfile(any());
     }
@@ -216,13 +216,13 @@ class UserControllerTest {
     }
 
     @Test
-    void 닉네임_수정시_인증_정보가_없으면_403을_반환한다() throws Exception {
+    void 닉네임_수정시_인증_정보가_없으면_401을_반환한다() throws Exception {
         // when
         mockMvc.perform(patch("/user/nickname")
                         .param("newName", NEW_NICKNAME))
 
                 // then
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(userService, never()).updateNickname(any(), any());
     }
@@ -289,13 +289,13 @@ class UserControllerTest {
     }
 
     @Test
-    void 프로필_사진_수정시_인증_정보가_없으면_403을_반환한다() throws Exception {
+    void 프로필_사진_수정시_인증_정보가_없으면_401을_반환한다() throws Exception {
         // when
         mockMvc.perform(patch("/user/profile-image")
                         .param("profileImageId", String.valueOf(NEW_PROFILE_IMAGE_ID)))
 
                 // then
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(userService, never()).updateProfileImage(any(), any());
     }
@@ -345,13 +345,13 @@ class UserControllerTest {
     }
 
     @Test
-    void fcm토큰_등록시_인증_정보가_없으면_403을_반환한다() throws Exception {
+    void fcm토큰_등록시_인증_정보가_없으면_401을_반환한다() throws Exception {
         // when
         mockMvc.perform(post("/user/fcm-token")
                         .param("fcmToken", FCM_TOKEN))
 
                 // then
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(fcmTokenService, never()).register(any(), any());
     }
@@ -401,13 +401,13 @@ class UserControllerTest {
     }
 
     @Test
-    void fcm토큰_삭제시_인증_정보가_없으면_403을_반환한다() throws Exception {
+    void fcm토큰_삭제시_인증_정보가_없으면_401을_반환한다() throws Exception {
         // when
         mockMvc.perform(delete("/user/fcm-token")
                         .param("fcmToken", FCM_TOKEN))
 
                 // then
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(fcmTokenService, never()).delete(any(), any());
     }

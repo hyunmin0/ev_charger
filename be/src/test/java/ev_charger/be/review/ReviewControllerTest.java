@@ -239,14 +239,14 @@ class ReviewControllerTest {
     }
 
     @Test
-    void 리뷰_작성시_인증_정보가_없으면_403을_반환한다() throws Exception {
+    void 리뷰_작성시_인증_정보가_없으면_401을_반환한다() throws Exception {
         // when
         mockMvc.perform(post("/reviews/{statId}", INVALID_STAT_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(reviewRequest)))
 
                 // then
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(reviewService, never()).createReview(any(), any(), any());
     }
@@ -320,14 +320,14 @@ class ReviewControllerTest {
     }
 
     @Test
-    void 리뷰_수정시_인증_정보가_없으면_403을_반환한다() throws Exception {
+    void 리뷰_수정시_인증_정보가_없으면_401을_반환한다() throws Exception {
         // when
         mockMvc.perform(patch("/reviews/{reviewId}", REVIEW_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(updateReviewRequest)))
 
                 // then
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(reviewService, never()).updateReview(any(), any(), any());
     }
@@ -391,12 +391,12 @@ class ReviewControllerTest {
     }
 
     @Test
-    void 리뷰_삭제시_인증_정보가_없으면_403을_반환한다() throws Exception {
+    void 리뷰_삭제시_인증_정보가_없으면_401을_반환한다() throws Exception {
         // when
         mockMvc.perform(delete("/reviews/{reviewId}", REVIEW_ID))
 
                 // then
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(reviewService, never()).deleteReview(any(), any());
     }
@@ -446,12 +446,12 @@ class ReviewControllerTest {
     }
 
     @Test
-    void 내_리뷰_목록_조회시_인증_정보가_없으면_403을_반환한다() throws Exception {
+    void 내_리뷰_목록_조회시_인증_정보가_없으면_401을_반환한다() throws Exception {
         // when
         mockMvc.perform(get("/reviews/my"))
 
                 // then
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(reviewService, never()).getReviewsByUser(any());
     }

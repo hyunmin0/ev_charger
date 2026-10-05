@@ -250,14 +250,14 @@ class UserCarControllerTest {
     }
 
     @Test
-    void 차량_추가시_인증_정보가_없으면_403을_반환한다() throws Exception {
+    void 차량_추가시_인증_정보가_없으면_401을_반환한다() throws Exception {
         // when
         mockMvc.perform(post("/user/cars")
                         .param("carId", String.valueOf(CAR_ID))
                         .param("batteryCapacity", String.valueOf(BATTERY_CAPACITY)))
 
         // then
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(userCarService, never()).addUserCar(any(), anyLong(), anyFloat());
     }
@@ -304,12 +304,12 @@ class UserCarControllerTest {
     }
 
     @Test
-    void 차량_목록_조회시_인증_정보가_없으면_403을_반환한다() throws Exception {
+    void 차량_목록_조회시_인증_정보가_없으면_401을_반환한다() throws Exception {
         // when
         mockMvc.perform(get("/user/cars"))
 
         // then
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(userCarService, never()).getUserCarList(any());
     }
@@ -357,12 +357,12 @@ class UserCarControllerTest {
     }
 
     @Test
-    void 차량_삭제시_인증_정보가_없으면_403을_반환한다() throws Exception {
+    void 차량_삭제시_인증_정보가_없으면_401을_반환한다() throws Exception {
         // when
         mockMvc.perform(delete("/user/cars/{userCarId}", USER_CAR_ID))
 
                 // then
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(userCarService, never()).deleteUserCar(any(), any());
     }

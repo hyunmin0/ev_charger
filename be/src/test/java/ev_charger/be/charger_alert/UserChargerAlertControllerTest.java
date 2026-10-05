@@ -182,7 +182,7 @@ class UserChargerAlertControllerTest {
     }
 
     @Test
-    void 알림_목록_조회시_인증_정보가_없으면_403을_반환한다() throws Exception {
+    void 알림_목록_조회시_인증_정보가_없으면_401을_반환한다() throws Exception {
         // given
         given(chargerAlertService.getChargerAlertsByUser(user)).willReturn(userChargerAlertResponses);
 
@@ -190,7 +190,7 @@ class UserChargerAlertControllerTest {
         mockMvc.perform(get("/charger-alerts"))
 
                 // then
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(chargerAlertService, never()).getChargerAlertsByUser(any());
     }
@@ -240,12 +240,12 @@ class UserChargerAlertControllerTest {
     }
 
     @Test
-    void 알림_추가시_인증_정보가_없으면_403을_반환한다() throws Exception {
+    void 알림_추가시_인증_정보가_없으면_401을_반환한다() throws Exception {
         // when
         mockMvc.perform(post("/charger-alerts/{statId}/{chgerId}", STAT_ID, CHGER_ID))
 
                 // then
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(chargerAlertService, never()).addChargerAlert(any(), any(), any());
     }
@@ -297,12 +297,12 @@ class UserChargerAlertControllerTest {
     }
 
     @Test
-    void 알림_해제시_인증_정보가_없으면_403을_반환한다() throws Exception {
+    void 알림_해제시_인증_정보가_없으면_401을_반환한다() throws Exception {
         // when
         mockMvc.perform(delete("/charger-alerts/{statId}/{chgerId}", STAT_ID, CHGER_ID))
 
                 // then
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(chargerAlertService, never()).deleteChargerAlert(any(), any(), any());
     }

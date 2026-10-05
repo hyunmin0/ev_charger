@@ -178,12 +178,12 @@ class FavoriteControllerTest {
     }
 
     @Test
-    void 즐겨찾기_추가시_인증_정보가_없으면_403을_반환한다() throws Exception {
+    void 즐겨찾기_추가시_인증_정보가_없으면_401을_반환한다() throws Exception {
         // when
         mockMvc.perform(post("/favorites/{statId}", STAT_ID))
 
                 // then
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(favoriteService, never()).addFavorite(any(), any());
     }
@@ -219,12 +219,12 @@ class FavoriteControllerTest {
     }
 
     @Test
-    void 즐겨찾기_삭제시_인증_정보가_없으면_403을_반환한다() throws Exception {
+    void 즐겨찾기_삭제시_인증_정보가_없으면_401을_반환한다() throws Exception {
         // when
         mockMvc.perform(delete("/favorites/{statId}", STAT_ID))
 
                 // then
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(favoriteService, never()).deleteFavorite(any(), any());
     }
@@ -302,14 +302,14 @@ class FavoriteControllerTest {
     }
 
     @Test
-    void 즐겨찾기_목록_조회시_인증_정보가_없으면_403을_반환한다() throws Exception {
+    void 즐겨찾기_목록_조회시_인증_정보가_없으면_401을_반환한다() throws Exception {
         // when
         mockMvc.perform(get("/favorites")
                         .param("lat", String.valueOf(LAT))
                         .param("lng", String.valueOf(LNG)))
 
                 // then
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(favoriteService, never()).getFavoriteList(any(), anyDouble(), anyDouble());
     }

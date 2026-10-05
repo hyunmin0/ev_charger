@@ -162,12 +162,12 @@ class NotificationHistoryControllerTest {
     }
 
     @Test
-    void 알림_목록_조회시_인증_정보가_없으면_403을_반환한다() throws Exception {
+    void 알림_목록_조회시_인증_정보가_없으면_401을_반환한다() throws Exception {
         // when
         mockMvc.perform(get("/notifications"))
 
         // then
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(notificationHistoryService, never()).getChargerAlertHistories(any());
     }
@@ -215,12 +215,12 @@ class NotificationHistoryControllerTest {
     }
 
     @Test
-    void 알림_읽음_처리시_인증_정보가_없으면_403을_반환한다() throws Exception {
+    void 알림_읽음_처리시_인증_정보가_없으면_401을_반환한다() throws Exception {
         // when
         mockMvc.perform(patch("/notifications/{id}/read", HISTORY_ID))
 
         // then
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(notificationHistoryService, never()).markAsRead(any(), anyLong());
     }
@@ -268,12 +268,12 @@ class NotificationHistoryControllerTest {
     }
 
     @Test
-    void 알림_단건_삭제시_인증_정보가_없으면_403을_반환한다() throws Exception {
+    void 알림_단건_삭제시_인증_정보가_없으면_401을_반환한다() throws Exception {
         // when
         mockMvc.perform(delete("/notifications/{id}", HISTORY_ID))
 
         // then
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(notificationHistoryService, never()).deleteHistory(any(), anyLong());
     }
@@ -293,12 +293,12 @@ class NotificationHistoryControllerTest {
     }
 
     @Test
-    void 알림_전체_삭제시_인증_정보가_없으면_403을_반환한다() throws Exception {
+    void 알림_전체_삭제시_인증_정보가_없으면_401을_반환한다() throws Exception {
         // when
         mockMvc.perform(delete("/notifications"))
 
         // then
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(notificationHistoryService, never()).deleteAllChargerAlertHistories(any());
     }

@@ -2,6 +2,7 @@ package ev_charger.be.config;
 // spring security 전체 설정 담당
 
 import ev_charger.be.security.JwtAuthenticationFilter;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -40,6 +41,16 @@ public class SecurityConfig {
                 // 세션 사용 안함  (jwt: stateless)
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                )
+                // 인증 실패(토큰 없음/만료/위조, 로그아웃한 토큰 등) -> 401
+                // 설정하지 않으면 시큐리티 기본값인 403이 나가서 프론트가 토큰 재발급(401일 때만)을 하지 못함
+                // 필터 단계 예외라 GlobalExceptionHandler에 잡히지 않으므로 ErrorResponse 형식으로 직접 작성
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                            response.setContentType("application/json;charset=UTF-8");
+                            response.getWriter().write("{\"message\":\"인증이 필요합니다.\"}");
+                        })
                 )
                 // cors 설정
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))

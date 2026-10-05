@@ -141,7 +141,7 @@ class NoticeControllerTest {
     }
 
     @Test
-    void 로그인하지_않고_공지를_등록하면_403을_반환한다() throws Exception {
+    void 로그인하지_않고_공지를_등록하면_401을_반환한다() throws Exception {
         // given
         NoticeCreateRequest request = new NoticeCreateRequest("점검 안내", "9/10 점검 예정입니다.");
 
@@ -149,7 +149,7 @@ class NoticeControllerTest {
         mockMvc.perform(post("/notices")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         // then
         verify(noticeService, never()).createNotice(any());
