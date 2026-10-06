@@ -25,8 +25,11 @@ GET_CHARGING_TIME_SCHEMA = {
             "type": "object",
             "properties": {
                 "brand": {"type": "string", "description": "차량 제조사 (시스템 프롬프트의 차량 정보 참고)"},
-                "model": {"type": "string", "description": "차량 모델명"},
-                "battery_type": {"type": "string", "description": "배터리 타입 (예: 스탠다드, 롱레인지, None)"},
+                "model": {"type": "string", "description": "모델명만 (배터리 타입·연식 제외). 예: '아이오닉 5'"},
+                "battery_type": {
+                    "type": "string",
+                    "description": "배터리 타입 (스탠다드, 롱레인지, None 등). 모델명에 섞지 말고 여기에 따로",
+                },
                 "model_year": {"type": "integer", "description": "연식"},
                 "charger_speed": {
                     "type": "string",
@@ -47,6 +50,23 @@ GET_CHARGING_TIME_SCHEMA = {
         },
     },
 }
+
+
+async def _available_options(session, brand: str) -> dict:
+    # 일치하는 행이 없을 때 LLM이 표기 차이를 스스로 고쳐 재호출할 수 있게 실제 값 목록을 같이 돌려줌
+    result = await session.execute(
+        text("""
+            SELECT DISTINCT model, battery_type, model_year
+            FROM charge WHERE brand = :brand
+            ORDER BY model, model_year, battery_type
+        """),
+        {"brand": brand},
+    )
+    models = [dict(r) for r in result.mappings().all()]
+    if models:
+        return {"available_models": models}
+    result = await session.execute(text("SELECT DISTINCT brand FROM charge ORDER BY brand"))
+    return {"available_brands": [r["brand"] for r in result.mappings().all()]}
 
 
 async def get_charging_time(
@@ -89,6 +109,8 @@ async def get_charging_time(
         async with AsyncSessionLocal() as session:
             result = await session.execute(query, params)
             rows = result.mappings().all()
+            if not rows:
+                options_hint = await _available_options(session, brand)
     except DB_ERRORS:
         logger.exception("get_charging_time DB 조회 실패 (%s %s %s)", brand, model, model_year)
         return json.dumps(
@@ -97,7 +119,7 @@ async def get_charging_time(
         )
 
     if not rows:
-        return json.dumps({"found": False}, ensure_ascii=False)
+        return json.dumps({"found": False, **options_hint}, ensure_ascii=False)
 
     low, high = REFERENCE_BAND[charger_speed]
     span = high - low  # 기준% : 급속 70, 완속 90

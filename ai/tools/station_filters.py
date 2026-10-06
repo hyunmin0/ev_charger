@@ -13,6 +13,11 @@ WHERE 조각은 두 종류다.
 조건이 안 걸릴 수 있는 것(거르기 조건)은 조건이 없으면 (None, {})을 돌려준다.
 """
 
+import re
+
+# LLM이 키워드 끝에 붙이는 "충전소"/"충전기"는 이름에 없는 경우가 많아 뺀다 (검색이 넓어지는 쪽이라 안전)
+_TRAILING_NOISE = re.compile(r"\s*(충전소|충전기)\s*$")
+
 # 급속/완속 기준 출력 (환경부 급속충전기 기준 50kW)
 FAST_CHARGER_MIN_KW = 50
 
@@ -74,6 +79,7 @@ def build_radius_clause(radius_km: float) -> tuple[str, dict]:
 
 def build_keyword_clause(keyword: str) -> tuple[str, dict]:
     """충전소명 또는 주소 부분 일치. 사용자 입력이라 LIKE 와일드카드는 이스케이프한다."""
+    keyword = _TRAILING_NOISE.sub("", keyword) or keyword
     escaped = keyword.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     return '(s."statNm" ILIKE :keyword OR s.addr ILIKE :keyword)', {"keyword": f"%{escaped}%"}
 
