@@ -11,6 +11,7 @@ from tools.station_filters import (
     build_keyword_clause,
     build_parking_free_clause,
     build_radius_clause,
+    normalize_keyword,
 )
 
 logger = logging.getLogger(__name__)
@@ -67,7 +68,8 @@ SEARCH_STATIONS_SCHEMA = {
         "description": (
             "충전소 이름이나 주소에 포함된 키워드로 충전소를 검색합니다 "
             "(예: '한국전력 광주지사 충전소가 어디야', '충장로에 있는 충전소'). "
-            "반경 제한 없이 전국에서 찾되, 사용자 위치에서 가까운 순으로 최대 10곳을 반환합니다. "
+            "반경 제한 없이 전국에서 찾되, 이름이 키워드와 정확히 같은 곳을 먼저, 그다음 사용자 위치에서 가까운 순으로 "
+            "최대 10곳을 반환합니다 (사용자 위치를 모르면 lat/lng 없이 호출하고, 거리 정보 없이 이름순). "
             "'근처/주변'처럼 위치 기준 질문에는 이 tool이 아니라 get_nearby_stations를 쓰세요."
         ),
         "parameters": {
@@ -82,11 +84,11 @@ SEARCH_STATIONS_SCHEMA = {
                 },
                 "lat": {
                     "type": "number",
-                    "description": "거리 계산 기준 위도 — 시스템 프롬프트의 현재 위치를 넣으세요",
+                    "description": "거리 계산 기준 위도 — 시스템 프롬프트의 현재 위치를 넣으세요. 현재 위치를 모르면 생략",
                 },
                 "lng": {
                     "type": "number",
-                    "description": "거리 계산 기준 경도 — 시스템 프롬프트의 현재 위치를 넣으세요",
+                    "description": "거리 계산 기준 경도 — 시스템 프롬프트의 현재 위치를 넣으세요. 현재 위치를 모르면 생략",
                 },
                 "charger_types": CHARGER_TYPES_PROPERTY,
                 "speed": SPEED_PROPERTY,
@@ -99,7 +101,7 @@ SEARCH_STATIONS_SCHEMA = {
                 },
                 "parking_free": PARKING_FREE_PROPERTY,
             },
-            "required": ["keyword", "lat", "lng"],
+            "required": ["keyword"],
         },
     },
 }
@@ -108,7 +110,11 @@ SEARCH_STATIONS_SCHEMA = {
 # ---------------------------------------------------------------- 공통 쿼리 실행
 # 두 tool은 WHERE 절만 다르고 SELECT 목록·정렬·상한·결과 형태·에러 처리가 모두 같아서 여기로 묶는다
 
-async def _run_station_query(where: list[str], params: dict, tool_name: str) -> str:
+async def _run_station_query(
+    where: list[str], params: dict, tool_name: str, order_by: str = "distance_km", with_distance: bool = True
+) -> str:
+    # 기준 위치를 모르면 거리를 계산할 수 없으므로 NULL로 내려준다
+    distance_sql = DISTANCE_KM_SQL if with_distance else "NULL::float8"
     # COUNT(*) OVER ()는 LIMIT이 적용되기 전 기준으로 계산되므로, 잘라내기 전 전체 건수가 나온다
     query = text(f"""
         SELECT
@@ -116,11 +122,11 @@ async def _run_station_query(where: list[str], params: dict, tool_name: str) -> 
             s."statNm",
             s.addr,
             s."parkingFree",
-            {DISTANCE_KM_SQL} AS distance_km,
+            {distance_sql} AS distance_km,
             COUNT(*) OVER () AS total_count
         FROM station s
         WHERE {' AND '.join(where)}
-        ORDER BY distance_km
+        ORDER BY {order_by}
         LIMIT :limit
     """)
 
@@ -143,7 +149,7 @@ async def _run_station_query(where: list[str], params: dict, tool_name: str) -> 
             "statNm": row["statNm"],
             "addr": row["addr"],
             "parkingFree": row["parkingFree"],
-            "distance_km": round(row["distance_km"], 2),
+            "distance_km": round(row["distance_km"], 2) if row["distance_km"] is not None else None,
         }
         for row in rows
     ]
@@ -200,8 +206,8 @@ async def get_nearby_stations(
 # 이름/주소 키워드 검색 — 반경 제한 없이 찾고, 정렬만 현재 위치 기준
 async def search_stations(
     keyword: str,
-    lat: float,
-    lng: float,
+    lat: float | None = None,
+    lng: float | None = None,
     charger_types: list[str] | None = None,
     available_only: bool = False,
     parking_free: bool | None = None,
@@ -210,9 +216,18 @@ async def search_stations(
     # 검색 출발점: 이름/주소 키워드
     keyword_clause, keyword_params = build_keyword_clause(keyword)
 
-    params = {"lat": lat, "lng": lng, **keyword_params}
+    # 이름이 키워드와 정확히 같은 충전소를 맨 앞에 (LLM이 목록의 첫 번째를 고르는 경향이 있음)
+    params = {"name_exact": normalize_keyword(keyword), **keyword_params}
     where = [keyword_clause]
 
     _append_common_filters(where, params, charger_types, available_only, speed, parking_free)
 
-    return await _run_station_query(where, params, "search_stations")
+    has_location = lat is not None and lng is not None
+    if has_location:
+        params.update(lat=lat, lng=lng)
+    tie_break = "distance_km" if has_location else 's."statNm"'
+    return await _run_station_query(
+        where, params, "search_stations",
+        order_by=f'(s."statNm" = :name_exact) DESC, {tie_break}',
+        with_distance=has_location,
+    )

@@ -12,25 +12,19 @@ SPEED_TO_DB_TYPES = {"급속": ["급속", "초급속"], "완속": ["완속"]}
 # charge.minutes의 측정 구간 (low%→high%): 급속(초급속 포함) 10→80%, 완속 10→100%
 REFERENCE_BAND = {"급속": (10, 80), "완속": (10, 100)}
 
+# 차량 정보(brand/model/battery_type/model_year)는 LLM이 넘기지 않고 chat_service가 선택된 차량(my_car)을 주입한다
 GET_CHARGING_TIME_SCHEMA = {
     "type": "function",
     "function": {
         "name": "get_charging_time",
         "description": (
-            "차량이 목표 충전량까지 도달하는 데 걸리는 시간, 또는 주어진 충전 가능 시간 동안 "
+            "사용자가 선택한 차량이 목표 충전량까지 도달하는 데 걸리는 시간, 또는 주어진 충전 가능 시간 동안 "
             "도달 가능한 충전량을 계산합니다. target_percent와 available_minutes 중 정확히 하나만 넘기세요. "
             "급속은 충전기 출력(kW)별로 결과가 여러 개 나올 수 있습니다."
         ),
         "parameters": {
             "type": "object",
             "properties": {
-                "brand": {"type": "string", "description": "차량 제조사 (시스템 프롬프트의 차량 정보 참고)"},
-                "model": {"type": "string", "description": "모델명만 (배터리 타입·연식 제외). 예: '아이오닉 5'"},
-                "battery_type": {
-                    "type": "string",
-                    "description": "배터리 타입 (스탠다드, 롱레인지, None 등). 모델명에 섞지 말고 여기에 따로",
-                },
-                "model_year": {"type": "integer", "description": "연식"},
                 "charger_speed": {
                     "type": "string",
                     "description": "충전 방식. 사용자가 말하지 않았으면 추측하지 말고 먼저 되물을 것",
@@ -46,39 +40,24 @@ GET_CHARGING_TIME_SCHEMA = {
                     "description": "충전 가능한 시간 (분). '30분 있는데 얼마나 충전돼?' 같은 질문일 때 사용",
                 },
             },
-            "required": ["brand", "model", "battery_type", "model_year", "charger_speed", "current_percent"],
+            "required": ["charger_speed", "current_percent"],
         },
     },
 }
 
 
-async def _available_options(session, brand: str) -> dict:
-    # 일치하는 행이 없을 때 LLM이 표기 차이를 스스로 고쳐 재호출할 수 있게 실제 값 목록을 같이 돌려줌
-    result = await session.execute(
-        text("""
-            SELECT DISTINCT model, battery_type, model_year
-            FROM charge WHERE brand = :brand
-            ORDER BY model, model_year, battery_type
-        """),
-        {"brand": brand},
-    )
-    models = [dict(r) for r in result.mappings().all()]
-    if models:
-        return {"available_models": models}
-    result = await session.execute(text("SELECT DISTINCT brand FROM charge ORDER BY brand"))
-    return {"available_brands": [r["brand"] for r in result.mappings().all()]}
-
-
 async def get_charging_time(
-    brand: str,
-    model: str,
-    battery_type: str,
-    model_year: int,
+    my_car: dict | None,
     charger_speed: str,
     current_percent: float,
     target_percent: float | None = None,
     available_minutes: float | None = None,
 ) -> str:
+    if my_car is None:
+        return json.dumps(
+            {"error": "선택된 차량이 없어 충전 시간을 계산할 수 없습니다. 차량을 선택해 달라고 안내하세요."},
+            ensure_ascii=False,
+        )
     if charger_speed not in SPEED_TO_DB_TYPES:
         return json.dumps({"error": "charger_speed는 '완속' 또는 '급속'이어야 합니다"}, ensure_ascii=False)
     if (target_percent is None) == (available_minutes is None):
@@ -98,10 +77,10 @@ async def get_charging_time(
         ORDER BY charger_output DESC NULLS LAST
     """)
     params = {
-        "brand": brand,
-        "model": model,
-        "battery_type": battery_type,
-        "model_year": model_year,
+        "brand": my_car["brand"],
+        "model": my_car["model"],
+        "battery_type": my_car["battery_type"],
+        "model_year": my_car["model_year"],
         "db_types": SPEED_TO_DB_TYPES[charger_speed],
     }
 
@@ -109,17 +88,15 @@ async def get_charging_time(
         async with AsyncSessionLocal() as session:
             result = await session.execute(query, params)
             rows = result.mappings().all()
-            if not rows:
-                options_hint = await _available_options(session, brand)
     except DB_ERRORS:
-        logger.exception("get_charging_time DB 조회 실패 (%s %s %s)", brand, model, model_year)
+        logger.exception("get_charging_time DB 조회 실패 (%s %s %s)", my_car["brand"], my_car["model"], my_car["model_year"])
         return json.dumps(
             {"error": "충전 시간 정보를 조회하지 못했습니다. 잠시 후 다시 시도해 주세요."},
             ensure_ascii=False,
         )
 
     if not rows:
-        return json.dumps({"found": False, **options_hint}, ensure_ascii=False)
+        return json.dumps({"found": False}, ensure_ascii=False)
 
     low, high = REFERENCE_BAND[charger_speed]
     span = high - low  # 기준% : 급속 70, 완속 90

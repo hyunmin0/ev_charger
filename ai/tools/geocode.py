@@ -37,9 +37,14 @@ GEOCODE_ADDRESS_SCHEMA = {
 }
 
 
-async def geocode_address(query: str) -> str:
+async def geocode_address(query: str, user_lat: float | None = None, user_lng: float | None = None) -> str:
     headers = {"Authorization": f"KakaoAK {config.KAKAO_API_KEY}"}
     params = {"query": query}
+    # 같은 이름이 여러 곳일 때(예: "시청") 사용자 현재 위치와 가까운 곳이 앞에 오게 한다.
+    # sort=distance는 이름과 무관한 주변 장소가 앞서서 쓰지 않고, 기준 좌표만 준다
+    if user_lat is not None and user_lng is not None:
+        params["x"] = user_lng
+        params["y"] = user_lat
 
     # 카카오 API 장애/타임아웃은 "장소를 못 찾음(found: False)"과 구분해서 error로 내려준다
     # (못 찾은 건 다시 물어보면 되지만, 장애는 재시도 안내를 해야 하므로)

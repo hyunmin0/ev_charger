@@ -6,7 +6,7 @@ import config
 from schemas import ChatRequest, ChatResponse, Station
 from prompts import build_system_prompt
 from context import get_my_car
-from tools import ACTIVE_TOOLS, TOOL_FUNCTIONS, STATION_RESULT_TOOLS
+from tools import TOOL_FUNCTIONS, STATION_RESULT_TOOLS, CONTEXT_PARAMS, tools_for
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +15,9 @@ client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
 # geocode_address -> get_nearby_stations처럼 tool끼리 순차 의존이 있을 수 있어서
 # LLM 호출을 정확히 2번이 아니라 상한이 있는 루프로 돈다 (Agent는 아님 - 상한 있음)
 MAX_TOOL_ROUNDS = 3
+
+# 기본값(1.0)에서는 필요한 정보가 다 있는데도 tool을 안 부르고 되묻는 일이 잦았다 (충전 시간 질문 24/30 → 0.2에서 28/30)
+LLM_TEMPERATURE = 0.2
 
 
 # schemas.py - ChatRequest, ChatResponse
@@ -34,13 +37,16 @@ async def chat(request: ChatRequest) -> ChatResponse:
     ]
 
     stations: list[Station] = []
+    tools = tools_for(my_car)
+    context = {"my_car": my_car, "user_lat": request.lat, "user_lng": request.lng}
 
     # -------------- ④ tool_calls가 있는 동안 반복 (최대 MAX_TOOL_ROUNDS번)
     for _ in range(MAX_TOOL_ROUNDS):
         response = await client.chat.completions.create(
             model="gpt-4.1-mini",
+            temperature=LLM_TEMPERATURE,
             messages=messages,
-            tools=ACTIVE_TOOLS, # tool 스키마
+            tools=tools, # tool 스키마
         )
 
         assistant_message = response.choices[0].message
@@ -59,7 +65,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
             # 여기서 막지 않으면 요청 전체가 500이 되므로, error를 tool 결과로 돌려주고 대화를 계속한다
             try:
                 args = json.loads(tool_call.function.arguments)
-                result = await TOOL_FUNCTIONS[name](**args) # tool 함수 호출
+                injected = {key: context[key] for key in CONTEXT_PARAMS.get(name, ())}
+                result = await TOOL_FUNCTIONS[name](**{**args, **injected}) # tool 함수 호출
             except Exception:
                 logger.exception("tool 실행 실패 (name=%s, args=%s)", name, tool_call.function.arguments)
                 result = json.dumps(
@@ -83,6 +90,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
     # -------------- ⑤ 루프 상한까지 돌았으면 tool 없이 마지막 호출로 강제 마무리
     final_response = await client.chat.completions.create(
         model="gpt-4.1-mini",
+        temperature=LLM_TEMPERATURE,
         messages=messages,
     )
 

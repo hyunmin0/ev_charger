@@ -16,16 +16,16 @@ class ChatRequest(BaseModel):
     # history는 클라이언트(앱)이 저장 (일단)
     # 앱이 들고 다니다가 매 요청에 포함해서 보냄
     history: list[ChatMessage]
-    # 사용자의 현재 GPS 좌표 (앱이 매 요청마다 실어서 보냄)
-    lat: float
-    lng: float
+    # 사용자의 현재 GPS 좌표 (앱이 매 요청마다 실어서 보냄). 위치 권한이 없거나 못 가져오면 null
+    lat: float | None = None
+    lng: float | None = None
 
 class Station(BaseModel):
     statId: str
     statNm: str
     addr: str
     parkingFree: str    # 'Y' | 'N'
-    distance_km: float
+    distance_km: float | None   # 현재 위치를 모르는 이름 검색에서는 None
 
 # AI -> 앱
 class ChatResponse(BaseModel):

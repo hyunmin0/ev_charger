@@ -77,11 +77,21 @@ def build_radius_clause(radius_km: float) -> tuple[str, dict]:
     )
 
 
+def normalize_keyword(keyword: str) -> str:
+    return _TRAILING_NOISE.sub("", keyword) or keyword
+
+
 def build_keyword_clause(keyword: str) -> tuple[str, dict]:
-    """충전소명 또는 주소 부분 일치. 사용자 입력이라 LIKE 와일드카드는 이스케이프한다."""
-    keyword = _TRAILING_NOISE.sub("", keyword) or keyword
-    escaped = keyword.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    return '(s."statNm" ILIKE :keyword OR s.addr ILIKE :keyword)', {"keyword": f"%{escaped}%"}
+    """검색어의 모든 단어가 충전소명 또는 주소에 들어 있으면 일치 (순서·사이 단어 무관).
+    LLM이 이름에서 단어를 빼거나 순서를 바꿔 검색해도 찾도록, 이어진 문자열 일치보다 넓게 잡는다.
+    사용자 입력이라 LIKE 와일드카드는 이스케이프한다."""
+    tokens = normalize_keyword(keyword).split() or [keyword]
+    clauses, params = [], {}
+    for i, token in enumerate(tokens):
+        escaped = token.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        clauses.append(f'(s."statNm" ILIKE :keyword{i} OR s.addr ILIKE :keyword{i})')
+        params[f"keyword{i}"] = f"%{escaped}%"
+    return "(" + " AND ".join(clauses) + ")", params
 
 
 # ---------------------------------------------------------------- WHERE 조각 ② 거르기 조건
