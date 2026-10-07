@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -8,13 +8,21 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
+import api from "@/lib/api";
+
 const ACCENT = "#5B9CF6";
-const CARS = ["선택 안함", "현대 아이오닉 5", "기아 EV9"];
-type Msg = { id: string; role: "user" | "bot"; text: string };
+const AI_URL = process.env.EXPO_PUBLIC_AI_URL ?? "";
+const INTERNAL_KEY = process.env.EXPO_PUBLIC_INTERNAL_KEY ?? "";
+
+type Station = { statId: string; statNm: string; addr: string; parkingFree: string; distance_km: number };
+type Msg = { id: string; role: "user" | "bot"; text: string; stations?: Station[] };
+type CarOption = { label: string; carId: number | null };
 
 const INITIAL_MSGS: Msg[] = [
   {
@@ -22,66 +30,125 @@ const INITIAL_MSGS: Msg[] = [
     role: "bot",
     text: "안녕하세요! 저는 전기차 AI 챗봇이에요.\n충전소 추천부터 전기차 관련 정보까지 도와드립니다.\n\n• 근처 충전소 찾기\n• 충전 요금 비교\n• 전기차 주행 가능 거리 계산\n• 충전기 타입별 안내\n\n이런 질문을 해보세요!",
   },
-  {
-    id: "1",
-    role: "user",
-    text: "성심당 근처 지하 충전소 추천해줘",
-  },
-  {
-    id: "2",
-    role: "bot",
-    text: "아직 LLM 프롬프트 수정중이라서\n답변을 생각하지 못했어요. 😅\n조금만 기다려주세요!",
-  },
 ];
 
+function decodeJwt(token: string): any {
+  try {
+    const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    return JSON.parse(atob(base64));
+  } catch {
+    return null;
+  }
+}
+
 export default function ChatScreen() {
-  const [car, setCar] = useState("선택 안함");
+  const [carList, setCarList] = useState<CarOption[]>([{ label: "선택 안함", carId: null }]);
+  const [selectedCar, setSelectedCar] = useState<CarOption>({ label: "선택 안함", carId: null });
   const [dropVisible, setDropVisible] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([...INITIAL_MSGS]);
   const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const flatListRef = useRef<FlatList>(null);
+
+  useEffect(() => {
+    (async () => {
+      // JWT에서 user_id 가져오기
+      const token = await AsyncStorage.getItem("jwt_token");
+      if (token) {
+        const payload = decodeJwt(token);
+        setUserId(payload?.sub ?? null);
+      }
+
+      // 내 차량 목록 가져오기
+      try {
+        const res = await api.get("/user/userCar");
+        const cars: CarOption[] = [
+          { label: "선택 안함", carId: null },
+          ...(res.data ?? []).map((c: any) => ({ label: c.carName, carId: c.carId })),
+        ];
+        setCarList(cars);
+      } catch {
+        // 차량 목록 못 불러와도 계속 진행
+      }
+    })();
+  }, []);
+
   const send = async () => {
-  const text = input.trim();
-  if (!text) return;
+    const text = input.trim();
+    if (!text || loading) return;
 
-  const stored = await AsyncStorage.getItem("mapLocation");
-  const location = stored ? JSON.parse(stored) : null;
+    const stored = await AsyncStorage.getItem("mapLocation");
+    const location = stored ? JSON.parse(stored) : null;
 
-  // 대화 히스토리 변환 (현재 메시지 제외한 이전 것들)
-  const history = msgs.map((m) => ({
-    role: m.role === "user" ? "user" : "assistant",
-    content: m.text,
-  }));
+    // 대화 히스토리 변환 (초기 안내 메시지 제외)
+    const history = msgs
+      .filter(m => m.id !== "0")
+      .map(m => ({
+        role: m.role === "user" ? "user" : "assistant",
+        content: m.text,
+      }));
 
-  const payload = {
-    user_id: "3fa85f64-5717-4562-b3fc-2c963f66afa6", // 나중에 실제 로그인 유저 ID로 교체
-    car_id: null, // 나중에 선택된 차량 ID로 교체
-    message: text,
-    history: history,
-    lat: location?.lat ?? null,
-    lng: location?.lng ?? null,
+    const userMsg: Msg = { id: Date.now().toString(), role: "user", text };
+    setMsgs(prev => [...prev, userMsg]);
+    setInput("");
+    setLoading(true);
+
+    try {
+      const res = await axios.post(
+        `${AI_URL}/chat`,
+        {
+          user_id: userId ?? "00000000-0000-0000-0000-000000000000",
+          car_id: selectedCar.carId,
+          message: text,
+          history,
+          lat: location?.lat ?? null,
+          lng: location?.lng ?? null,
+        },
+        {
+          headers: { "X-Internal-Key": INTERNAL_KEY },
+          timeout: 30000,
+        }
+      );
+
+      const botMsg: Msg = {
+        id: (Date.now() + 1).toString(),
+        role: "bot",
+        text: res.data.reply,
+        stations: res.data.stations?.length > 0 ? res.data.stations : undefined,
+      };
+      setMsgs(prev => [...prev, botMsg]);
+    } catch {
+      setMsgs(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        role: "bot",
+        text: "죄송해요, 응답을 받지 못했어요. 다시 시도해주세요.",
+      }]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  console.log("전송:", JSON.stringify(payload, null, 2));
-  // 백엔드 연결 시: const res = await axios.post("/api/chat", payload);
-
-  const userMsg: Msg = { id: Date.now().toString(), role: "user", text };
-  const botMsg: Msg = {
-    id: (Date.now() + 1).toString(),
-    role: "bot",
-    text: "아직 LLM 프롬프트 수정중이라서\n답변을 생각하지 못했어요. 😅",
-  };
-  setMsgs((prev) => [...prev, userMsg, botMsg]);
-  setInput("");
-};
+  const renderStation = (station: Station) => (
+    <View key={station.statId} style={s.stationCard}>
+      <Text style={s.stationName} numberOfLines={1}>{station.statNm}</Text>
+      <Text style={s.stationAddr} numberOfLines={1}>{station.addr}</Text>
+      <View style={s.stationRow}>
+        <Text style={s.stationDist}>{station.distance_km.toFixed(1)}km</Text>
+        {station.parkingFree === "Y" && (
+          <View style={s.parkingBadge}><Text style={s.parkingTxt}>무료주차</Text></View>
+        )}
+      </View>
+    </View>
+  );
 
   return (
     <SafeAreaView style={s.safe} edges={["top"]}>
       {/* 헤더 */}
-      <View style={[s.header, {paddingTop: 14
-      }]}>
+      <View style={[s.header, { paddingTop: 14 }]}>
         <Ionicons name="car-outline" size={20} color="#444" />
-        <TouchableOpacity style={s.carBtn} onPress={() => setDropVisible((v) => !v)}>
-          <Text style={s.carText}>{car}</Text>
+        <TouchableOpacity style={s.carBtn} onPress={() => setDropVisible(v => !v)}>
+          <Text style={s.carText}>{selectedCar.label}</Text>
           <Ionicons
             name={dropVisible ? "chevron-up-outline" : "chevron-down-outline"}
             size={16}
@@ -100,14 +167,14 @@ export default function ChatScreen() {
             onPress={() => setDropVisible(false)}
           />
           <View style={s.dropdown}>
-            {CARS.map((c) => (
+            {carList.map((c) => (
               <TouchableOpacity
-                key={c}
-                style={[s.dropItem, c === car && s.dropItemActive]}
-                onPress={() => { setCar(c); setDropVisible(false); }}
+                key={c.label}
+                style={[s.dropItem, c.label === selectedCar.label && s.dropItemActive]}
+                onPress={() => { setSelectedCar(c); setDropVisible(false); }}
               >
-                <Text style={[s.dropItemText, c === car && s.dropItemTextActive]}>{c}</Text>
-                {c === car && <Ionicons name="checkmark" size={16} color={ACCENT} />}
+                <Text style={[s.dropItemText, c.label === selectedCar.label && s.dropItemTextActive]}>{c.label}</Text>
+                {c.label === selectedCar.label && <Ionicons name="checkmark" size={16} color={ACCENT} />}
               </TouchableOpacity>
             ))}
           </View>
@@ -121,9 +188,11 @@ export default function ChatScreen() {
         keyboardVerticalOffset={60}
       >
         <FlatList
+          ref={flatListRef}
           data={msgs}
-          keyExtractor={(m) => m.id}
+          keyExtractor={m => m.id}
           contentContainerStyle={s.list}
+          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
           renderItem={({ item }) =>
             item.role === "user" ? (
               <View style={s.rowUser}>
@@ -136,13 +205,32 @@ export default function ChatScreen() {
                 <View style={s.botAvatar}>
                   <Ionicons name="flash" size={14} color="#fff" />
                 </View>
-                <View style={s.bubbleBot}>
-                  <Text style={s.bubbleBotText}>{item.text}</Text>
+                <View style={{ flex: 1 }}>
+                  <View style={s.bubbleBot}>
+                    <Text style={s.bubbleBotText}>{item.text}</Text>
+                  </View>
+                  {item.stations && item.stations.length > 0 && (
+                    <View style={s.stationList}>
+                      {item.stations.map(renderStation)}
+                    </View>
+                  )}
                 </View>
               </View>
             )
           }
           ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+          ListFooterComponent={
+            loading ? (
+              <View style={[s.rowBot, { marginTop: 12 }]}>
+                <View style={s.botAvatar}>
+                  <Ionicons name="flash" size={14} color="#fff" />
+                </View>
+                <View style={[s.bubbleBot, { paddingHorizontal: 16 }]}>
+                  <ActivityIndicator size="small" color={ACCENT} />
+                </View>
+              </View>
+            ) : null
+          }
         />
 
         {/* 입력바 */}
@@ -157,9 +245,9 @@ export default function ChatScreen() {
             returnKeyType="default"
           />
           <TouchableOpacity
-            style={[s.sendBtn, !input.trim() && s.sendBtnOff]}
+            style={[s.sendBtn, (!input.trim() || loading) && s.sendBtnOff]}
             onPress={send}
-            disabled={!input.trim()}
+            disabled={!input.trim() || loading}
           >
             <Ionicons name="arrow-up" size={20} color="#fff" />
           </TouchableOpacity>
@@ -239,13 +327,28 @@ const s = StyleSheet.create({
     borderBottomLeftRadius: 4,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    maxWidth: "72%",
     shadowColor: "#000",
     shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
   },
   bubbleBotText: { fontSize: 14, color: "#222", lineHeight: 21 },
+  stationList: { marginTop: 8, gap: 8 },
+  stationCard: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 12,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  stationName: { fontSize: 14, fontWeight: "700", color: "#111", marginBottom: 2 },
+  stationAddr: { fontSize: 12, color: "#888", marginBottom: 6 },
+  stationRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  stationDist: { fontSize: 12, color: ACCENT, fontWeight: "600" },
+  parkingBadge: { backgroundColor: "#EBF3FF", borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
+  parkingTxt: { fontSize: 11, color: ACCENT },
   inputRow: {
     flexDirection: "row",
     alignItems: "flex-end",

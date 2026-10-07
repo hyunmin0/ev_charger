@@ -2,6 +2,7 @@ import React, { useState, useCallback } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, FlatList,
   Modal, TextInput, Alert, ActivityIndicator,
+  KeyboardAvoidingView, Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -182,69 +183,74 @@ export default function CarManagementScreen() {
         transparent
         onRequestClose={() => setSearchVisible(false)}
       >
-        <TouchableOpacity style={S.backdrop} activeOpacity={1} onPress={() => setSearchVisible(false)} />
-        <View style={S.modalSheet}>
-          <View style={S.modalHandle} />
-          <Text style={S.modalTitle}>차량 추가</Text>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <TouchableOpacity style={S.backdrop} activeOpacity={1} onPress={() => setSearchVisible(false)} />
+          <View style={S.modalSheet}>
+            <View style={S.modalHandle} />
+            <Text style={S.modalTitle}>차량 추가</Text>
 
-          <Text style={S.inputLabel}>차량 검색</Text>
-          <View style={S.searchRow}>
-            <TextInput
-              style={[S.input, { flex: 1 }]}
-              placeholder="브랜드 또는 모델명 입력"
-              placeholderTextColor="#bbb"
-              value={keyword}
-              onChangeText={v => { setKeyword(v); setSelectedCar(null); }}
-              onSubmitEditing={searchCars}
-            />
-            <TouchableOpacity style={S.searchBtn} onPress={searchCars}>
-              {searching
+            <Text style={S.inputLabel}>차량 검색</Text>
+            <View style={S.searchRow}>
+              <TextInput
+                style={[S.input, { flex: 1 }]}
+                placeholder="브랜드 또는 모델명 입력"
+                placeholderTextColor="#bbb"
+                value={keyword}
+                onChangeText={v => { setKeyword(v); setSelectedCar(null); }}
+                onSubmitEditing={searchCars}
+              />
+              <TouchableOpacity style={S.searchBtn} onPress={searchCars}>
+                {searching
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Ionicons name="search" size={18} color="#fff" />}
+              </TouchableOpacity>
+            </View>
+
+            {searchResults.length > 0 && (
+              <View style={S.resultList}>
+                {searchResults.map(car => (
+                  <TouchableOpacity
+                    key={car.carId}
+                    style={S.resultItem}
+                    onPress={() => selectCar(car)}
+                  >
+                    <Text style={S.resultName}>
+                      {car.brand} {car.model}{car.trim ? ` ${car.trim}` : ""}
+                    </Text>
+                    <Text style={S.resultSub}>{car.modelYear}년형 · {car.batteryCapacity}kWh</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {selectedCar && (
+              <>
+                <Text style={[S.inputLabel, { marginTop: 16 }]}>배터리 용량 (kWh)</Text>
+                <TextInput
+                  style={S.input}
+                  placeholder="예: 84"
+                  placeholderTextColor="#bbb"
+                  value={batteryInput}
+                  onChangeText={setBatteryInput}
+                  keyboardType="decimal-pad"
+                />
+              </>
+            )}
+
+            <TouchableOpacity
+              style={[S.saveBtn, saving && { opacity: 0.6 }]}
+              onPress={handleAdd}
+              disabled={saving}
+            >
+              {saving
                 ? <ActivityIndicator size="small" color="#fff" />
-                : <Ionicons name="search" size={18} color="#fff" />}
+                : <Text style={S.saveTxt}>추가 완료</Text>}
             </TouchableOpacity>
           </View>
-
-          {searchResults.length > 0 && (
-            <View style={S.resultList}>
-              {searchResults.map(car => (
-                <TouchableOpacity
-                  key={car.carId}
-                  style={S.resultItem}
-                  onPress={() => selectCar(car)}
-                >
-                  <Text style={S.resultName}>
-                    {car.brand} {car.model}{car.trim ? ` ${car.trim}` : ""}
-                  </Text>
-                  <Text style={S.resultSub}>{car.modelYear}년형 · {car.batteryCapacity}kWh</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {selectedCar && (
-            <>
-              <Text style={[S.inputLabel, { marginTop: 16 }]}>배터리 용량 (kWh)</Text>
-              <TextInput
-                style={S.input}
-                placeholder="예: 84"
-                placeholderTextColor="#bbb"
-                value={batteryInput}
-                onChangeText={setBatteryInput}
-                keyboardType="decimal-pad"
-              />
-            </>
-          )}
-
-          <TouchableOpacity
-            style={[S.saveBtn, saving && { opacity: 0.6 }]}
-            onPress={handleAdd}
-            disabled={saving}
-          >
-            {saving
-              ? <ActivityIndicator size="small" color="#fff" />
-              : <Text style={S.saveTxt}>추가 완료</Text>}
-          </TouchableOpacity>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );

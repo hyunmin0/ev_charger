@@ -111,6 +111,7 @@ export default function StationDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [bookmarked, setBookmarked] = useState(false);
   const [bookmarkLoading, setBookmarkLoading] = useState(false);
+  const [alertLoading, setAlertLoading] = useState<Set<string>>(new Set());
 
   // 리뷰 작성 모달 상태
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
@@ -150,6 +151,32 @@ export default function StationDetailScreen() {
       setBookmarkLoading(false);
     }
   }, [station, bookmarked, bookmarkLoading]);
+
+  const toggleAlert = useCallback(async (chger: ChgerDetail) => {
+    if (!station || alertLoading.has(chger.chgerId)) return;
+    setAlertLoading(prev => new Set([...prev, chger.chgerId]));
+    try {
+      if (chger.isAlert) {
+        await api.delete(`/charger-alerts/${station.statId}/${chger.chgerId}`);
+      } else {
+        await api.post(`/charger-alerts/${station.statId}/${chger.chgerId}`);
+      }
+      setStation(prev => prev ? {
+        ...prev,
+        chargers: prev.chargers.map(c =>
+          c.chgerId === chger.chgerId ? { ...c, isAlert: !c.isAlert } : c
+        ),
+      } : null);
+    } catch {
+      Alert.alert("오류", "알림 설정에 실패했습니다.");
+    } finally {
+      setAlertLoading(prev => {
+        const next = new Set(prev);
+        next.delete(chger.chgerId);
+        return next;
+      });
+    }
+  }, [station, alertLoading]);
 
   const handleSubmitReview = async () => {
     if (!reviewContent.trim()) {
@@ -323,6 +350,21 @@ export default function StationDetailScreen() {
                   <Text style={[styles.chargerStatus, { color: cfg.color }]}>{cfg.label}</Text>
                   <Text style={styles.chargerType}>{CHGER_TYPE_LABEL[c.chgerType] ?? c.chgerType}</Text>
                   <Text style={styles.chargerSpeed}>충전 출력 {c.output ?? "-"}</Text>
+                  <TouchableOpacity
+                    style={styles.bellBtn}
+                    onPress={() => toggleAlert(c)}
+                    disabled={alertLoading.has(c.chgerId)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    {alertLoading.has(c.chgerId)
+                      ? <ActivityIndicator size="small" color="#5B9CF6" />
+                      : <Ionicons
+                          name={c.isAlert ? "notifications" : "notifications-outline"}
+                          size={18}
+                          color={c.isAlert ? "#5B9CF6" : "#bbb"}
+                        />
+                    }
+                  </TouchableOpacity>
                 </View>
               );
             })}
@@ -452,6 +494,7 @@ const styles = StyleSheet.create({
   chargerStatus: { fontSize: 13, fontWeight: "700", marginBottom: 4 },
   chargerType: { fontSize: 12, color: "#555", marginBottom: 2 },
   chargerSpeed: { fontSize: 11, color: "#888" },
+  bellBtn: { position: "absolute", top: 10, right: 10 },
   ratingRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   ratingText: { fontSize: 15, fontWeight: "700", color: "#111" },
   reviewCountText: { fontSize: 13, color: "#888" },
