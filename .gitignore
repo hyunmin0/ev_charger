@@ -87,6 +87,7 @@ venv/
 # 로그
 *.log
 logs/
+*.gz
 
 # OS / 에디터
 .DS_Store

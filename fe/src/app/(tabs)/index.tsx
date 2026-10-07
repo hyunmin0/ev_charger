@@ -66,17 +66,18 @@ function stationTags(s: Station) {
 const predColor = (p: string | null) =>
   p === "여유" ? "#4CAF50" : p === "보통" ? "#FF9800" : p === "혼잡" ? "#F44336" : "#aaa";
 
+// window.map으로 전역 선언해야 injectJavaScript에서 접근 가능
 const mapHTML = `<!DOCTYPE html><html><head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>* { margin:0; padding:0; } html,body,#map { width:100%; height:100%; }</style>
 </head><body><div id="map"></div>
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_API_KEY}&autoload=false"></script>
 <script>kakao.maps.load(function() {
-  var map = new kakao.maps.Map(document.getElementById('map'), {
+  window.map = new kakao.maps.Map(document.getElementById('map'), {
     center: new kakao.maps.LatLng(37.5665, 126.9780), level: 5
   });
-  kakao.maps.event.addListener(map, 'center_changed', function() {
-    var center = map.getCenter();
+  kakao.maps.event.addListener(window.map, 'center_changed', function() {
+    var center = window.map.getCenter();
     window.ReactNativeWebView.postMessage(JSON.stringify({ lat: center.getLat(), lng: center.getLng() }));
   });
 });</script></body></html>`;
@@ -134,6 +135,12 @@ export default function HomeScreen() {
   const [fetchError, setFetchError] = useState(false);
   const userLat = useRef(35.1595);
   const userLng = useRef(126.8526);
+  // 지도 위치 이동용
+  const webviewRef = useRef<any>(null);
+  const mapLoaded = useRef(false);
+  const pendingLocation = useRef<{ lat: number; lng: number } | null>(null);
+  // 마운트 시 두 번째 useEffect 중복 fetch 방지
+  const isInitialMount = useRef(true);
 
   const [sheetVisible, setSheetVisible] = useState(false);
   const [popupChip, setPopupChip] = useState<string | null>(null);
@@ -180,12 +187,25 @@ export default function HomeScreen() {
         const loc = await Location.getCurrentPositionAsync({});
         userLat.current = loc.coords.latitude;
         userLng.current = loc.coords.longitude;
+        // 맵이 이미 로드됐으면 바로 이동, 아니면 대기열에 저장
+        if (mapLoaded.current) {
+          webviewRef.current?.injectJavaScript(
+            `window.map.panTo(new kakao.maps.LatLng(${loc.coords.latitude}, ${loc.coords.longitude})); true;`
+          );
+        } else {
+          pendingLocation.current = { lat: loc.coords.latitude, lng: loc.coords.longitude };
+        }
       }
       fetchStations();
     })();
   }, []);
 
   useEffect(() => {
+    // 마운트 시에는 위 useEffect에서 위치 받은 후 fetch하므로 여기선 skip
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
     fetchStations();
   }, [radiusIdx, available]);
 
@@ -307,11 +327,22 @@ export default function HomeScreen() {
   return (
     <View style={S.container}>
       <WebView
+        ref={webviewRef}
         source={{ html: mapHTML, baseUrl: "http://localhost" }}
         style={StyleSheet.absoluteFill}
         originWhitelist={["*"]}
         javaScriptEnabled
         domStorageEnabled
+        onLoadEnd={() => {
+          // 카카오 SDK 로드 완료 후 대기 중인 위치가 있으면 이동
+          mapLoaded.current = true;
+          if (pendingLocation.current) {
+            webviewRef.current?.injectJavaScript(
+              `window.map.panTo(new kakao.maps.LatLng(${pendingLocation.current.lat}, ${pendingLocation.current.lng})); true;`
+            );
+            pendingLocation.current = null;
+          }
+        }}
         onMessage={(e) => {
           const { lat, lng } = JSON.parse(e.nativeEvent.data);
           AsyncStorage.setItem("mapLocation", JSON.stringify({ lat, lng }));
