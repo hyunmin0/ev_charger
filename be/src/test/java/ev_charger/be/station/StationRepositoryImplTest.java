@@ -64,11 +64,11 @@ class StationRepositoryImplTest {
     // ===== 샘플 데이터 =====
     // 서울시청을 기준 위치로, 반경 3km 안 충전소 5개 + 반경 밖 1개 (sql/sample_data.sql과 같은 구성)
     //  충전소   거리    주차/개방/층          시설       충전기 (타입코드 상태 출력kW)          리뷰          혼잡도
-    //  서울시청 ~0m    무료/개방/지상        공공(AO)   01 대기 100, 02 충전중 7              2개(평균 4.5) 보통
-    //  덕수궁   ~270m  유료/개방/지하        주차(BO)   04 대기 200, 04 대기 200              없음          예측 2개 중 최신값 여유
-    //  시청역   ~400m  유료/개방/지하        근린(IO)   02 미확인 7                           없음          없음
-    //  광화문   ~1km   무료/이용제한/지상    상업(EO)   02 충전중 7, 07 충전중 22 (급속 없음) 1개(3점)      없음
-    //  을지로   ~1.1km 무료/개방/지상        공공(AO)   01 점검중 50, 04 운영중지 100         없음          행은 있지만 null이어야 함
+    //  서울시청 ~0m    무료/개방/지상        공공(A0)   01 대기 100, 02 충전중 7              2개(평균 4.5) 보통
+    //  덕수궁   ~270m  유료/개방/지하        주차(B0)   04 대기 200, 04 대기 200              없음          예측 2개 중 최신값 여유
+    //  시청역   ~400m  유료/개방/지하        근린(I0)   02 미확인 7                           없음          없음
+    //  광화문   ~1km   무료/이용제한/지상    상업(E0)   02 충전중 7, 07 충전중 22 (급속 없음) 1개(3점)      없음
+    //  을지로   ~1.1km 무료/개방/지상        공공(A0)   01 점검중 50, 04 운영중지 100         없음          행은 있지만 null이어야 함
     //  강남역   ~9km   반경 밖
     //  충전기 타입: 01 DC차데모, 02 AC완속, 04 DC콤보, 07 AC3상 (02/07/08은 급속 아님)
 
@@ -485,7 +485,7 @@ class StationRepositoryImplTest {
     @Test
     void kinds_필터를_주면_해당_시설_충전소만_조회한다() {
         // given
-        StationFilter  filter = new StationFilter(null, null, null, null, null, List.of(), List.of("AO"), List.of());
+        StationFilter  filter = new StationFilter(null, null, null, null, null, List.of(), List.of("A0"), List.of());
         NearbyStationRequest request = new NearbyStationRequest(USER_LAT, USER_LNG, RANGE, null, filter);
 
         Double cursorDistance = null;

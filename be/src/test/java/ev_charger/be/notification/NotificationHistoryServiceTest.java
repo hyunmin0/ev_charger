@@ -3,6 +3,8 @@ package ev_charger.be.notification;
 import ev_charger.be.charger_alert.ChargerAlert;
 import ev_charger.be.notice.Notice;
 import ev_charger.be.notification.dto.NotificationHistoryResponse;
+import ev_charger.be.station.Station;
+import ev_charger.be.station.StationRepository;
 import ev_charger.be.station.charger.Charger;
 import ev_charger.be.user.User;
 import ev_charger.be.user.enums.Provider;
@@ -19,6 +21,7 @@ import org.springframework.data.domain.Sort;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -34,6 +37,9 @@ class NotificationHistoryServiceTest {
 
     @Mock
     private NotificationHistoryRepository notificationHistoryRepository;
+
+    @Mock
+    private StationRepository stationRepository;
 
     private NotificationHistoryService notificationHistoryService;
 
@@ -150,6 +156,11 @@ class NotificationHistoryServiceTest {
         given(notificationHistoryRepository.findByUserAndChgerIdIsNotNull(eq(user), any(Sort.class)))
                 .willReturn(List.of(history));
 
+        Station station = mock(Station.class);
+        given(station.getStatId()).willReturn("ST1");
+        given(station.getStatNm()).willReturn("테스트 충전소");
+        given(stationRepository.findAllById(Set.of("ST1"))).willReturn(List.of(station));
+
         // when
         List<NotificationHistoryResponse> responses = notificationHistoryService.getChargerAlertHistories(user);
 
@@ -158,9 +169,30 @@ class NotificationHistoryServiceTest {
         NotificationHistoryResponse response = responses.get(0);
         assertThat(response.id()).isEqualTo(1L);
         assertThat(response.statId()).isEqualTo("ST1");
+        assertThat(response.statNm()).isEqualTo("테스트 충전소");
         assertThat(response.chgerId()).isEqualTo("01");
         assertThat(response.createdAt()).isEqualTo(createdAt);
         assertThat(response.isRead()).isFalse();
+    }
+
+    @Test
+    void 알림_이후_충전소가_삭제됐으면_충전소_이름은_null로_조회한다() {
+        // given
+        NotificationHistory history = mock(NotificationHistory.class);
+        given(history.getStatId()).willReturn("ST1");
+        given(history.getChgerId()).willReturn("01");
+
+        given(notificationHistoryRepository.findByUserAndChgerIdIsNotNull(eq(user), any(Sort.class)))
+                .willReturn(List.of(history));
+        given(stationRepository.findAllById(Set.of("ST1"))).willReturn(List.of()); // 충전소 없음
+
+        // when
+        List<NotificationHistoryResponse> responses = notificationHistoryService.getChargerAlertHistories(user);
+
+        // then
+        assertThat(responses).hasSize(1);
+        assertThat(responses.get(0).statId()).isEqualTo("ST1"); // 기록은 그대로 남음
+        assertThat(responses.get(0).statNm()).isNull();
     }
 
     @Test

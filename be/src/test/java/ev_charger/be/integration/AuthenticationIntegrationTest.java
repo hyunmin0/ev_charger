@@ -69,7 +69,7 @@ class AuthenticationIntegrationTest extends IntegrationTestSupport {
     void 서명이_잘못된_토큰이면_거부한다() throws Exception {
         // given
         String accessToken = jwtProvider.generateAccessToken(user.getUserId());
-        String tamperedToken = accessToken.substring(0, accessToken.length() - 2) + "xx"; // 서명 부분 변조
+        String tamperedToken = tamperSignature(accessToken);
 
         // when & then
         mockMvc.perform(get(PROFILE_URL)
@@ -197,7 +197,7 @@ class AuthenticationIntegrationTest extends IntegrationTestSupport {
     void 서명이_잘못된_refresh_token으로는_재발급할_수_없다() throws Exception {
         // given
         String refreshToken = login();
-        String tamperedToken = refreshToken.substring(0, refreshToken.length() - 2) + "xx"; // 서명 부분 변조
+        String tamperedToken = tamperSignature(refreshToken);
 
         // when & then
         mockMvc.perform(post(REISSUE_URL)
@@ -211,5 +211,13 @@ class AuthenticationIntegrationTest extends IntegrationTestSupport {
         String refreshToken = jwtProvider.generateRefreshToken(user.getUserId());
         user.updateRefreshToken(refreshToken);
         return refreshToken;
+    }
+
+    // 서명 부분 변조: 서명의 첫 글자를 다른 글자로 교체
+    // (마지막 글자는 base64 패딩 비트라 바꿔도 서명 값이 그대로일 수 있어서 첫 글자를 바꿈)
+    private String tamperSignature(String token) {
+        int signatureStart = token.lastIndexOf('.') + 1;
+        char replacement = token.charAt(signatureStart) == 'A' ? 'B' : 'A';
+        return token.substring(0, signatureStart) + replacement + token.substring(signatureStart + 1);
     }
 }

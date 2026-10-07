@@ -3,6 +3,8 @@ package ev_charger.be.notification;
 import ev_charger.be.charger_alert.ChargerAlert;
 import ev_charger.be.notice.Notice;
 import ev_charger.be.notification.dto.NotificationHistoryResponse;
+import ev_charger.be.station.Station;
+import ev_charger.be.station.StationRepository;
 import ev_charger.be.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
@@ -11,7 +13,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 
@@ -21,6 +25,7 @@ import java.util.stream.Collectors;
 public class NotificationHistoryService {
 
     private final NotificationHistoryRepository notificationHistoryRepository;
+    private final StationRepository stationRepository;
 
     // save(charger) - ChargerAlertService에서 이미 ChargerAlert를 들고 있을 거기 때문에 객체를 받는 게 효율적임
     @Transactional
@@ -60,10 +65,20 @@ public class NotificationHistoryService {
      * 충전기 알림 기록 조회
      */
     public List<NotificationHistoryResponse> getChargerAlertHistories(User user) {
-        return notificationHistoryRepository
-                .findByUserAndChgerIdIsNotNull(user, Sort.by(Sort.Direction.DESC, "createdAt"))
-                .stream()
-                .map(h -> new NotificationHistoryResponse(h.getId(), h.getStatId(), h.getChgerId(), h.getCreatedAt(), h.isRead()))
+        List<NotificationHistory> histories = notificationHistoryRepository
+                .findByUserAndChgerIdIsNotNull(user, Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        // 충전소 이름: 알림 기록마다 조회하지 않도록 statId를 모아서 한 번에 조회
+        // 알림 기록은 충전소와 FK로 연결되어 있지 않으므로, 삭제된 충전소는 map에 없음 -> statNm = null
+        Set<String> statIds = histories.stream()
+                .map(NotificationHistory::getStatId)
+                .collect(Collectors.toSet());
+        Map<String, String> statNms = stationRepository.findAllById(statIds).stream()
+                .collect(Collectors.toMap(Station::getStatId, Station::getStatNm));
+
+        return histories.stream()
+                .map(h -> new NotificationHistoryResponse(
+                        h.getId(), h.getStatId(), statNms.get(h.getStatId()), h.getChgerId(), h.getCreatedAt(), h.isRead()))
                 .collect(Collectors.toList());
     }
 

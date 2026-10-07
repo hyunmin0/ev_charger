@@ -73,9 +73,11 @@ class NotificationHistoryControllerTest {
     // 알림 목록 조회 응답에 들어갈 알림 기록 정보
     private static final Long HISTORY_ID = 1L;
     private static final String STAT_ID = "ME000001";
+    private static final String STAT_NM = "서울시청 충전소";
     private static final String CHGER_ID = "01";
     private static final Long SECOND_HISTORY_ID = 2L;
     private static final String SECOND_STAT_ID = "ME000002";
+    private static final String SECOND_STAT_NM = "덕수궁 충전소";
     private static final String SECOND_CHGER_ID = "02";
 
     // 존재하지 않거나 본인 알림이 아닌 id
@@ -108,8 +110,8 @@ class NotificationHistoryControllerTest {
         auth = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
 
         notificationHistoryResponses = List.of(
-                new NotificationHistoryResponse(HISTORY_ID, STAT_ID, CHGER_ID, LocalDateTime.now(), false),
-                new NotificationHistoryResponse(SECOND_HISTORY_ID, SECOND_STAT_ID, SECOND_CHGER_ID, LocalDateTime.now().minusHours(1), true)
+                new NotificationHistoryResponse(HISTORY_ID, STAT_ID, STAT_NM, CHGER_ID, LocalDateTime.now(), false),
+                new NotificationHistoryResponse(SECOND_HISTORY_ID, SECOND_STAT_ID, SECOND_STAT_NM, SECOND_CHGER_ID, LocalDateTime.now().minusHours(1), true)
         );
     }
 
@@ -134,10 +136,12 @@ class NotificationHistoryControllerTest {
                 .andExpect(jsonPath("$.length()").value(notificationHistoryResponses.size()))
                 .andExpect(jsonPath("$[0].id").value(HISTORY_ID))
                 .andExpect(jsonPath("$[0].statId").value(STAT_ID))
+                .andExpect(jsonPath("$[0].statNm").value(STAT_NM))
                 .andExpect(jsonPath("$[0].chgerId").value(CHGER_ID))
                 .andExpect(jsonPath("$[0].isRead").value(false))
                 .andExpect(jsonPath("$[1].id").value(SECOND_HISTORY_ID))
                 .andExpect(jsonPath("$[1].statId").value(SECOND_STAT_ID))
+                .andExpect(jsonPath("$[1].statNm").value(SECOND_STAT_NM))
                 .andExpect(jsonPath("$[1].chgerId").value(SECOND_CHGER_ID))
                 .andExpect(jsonPath("$[1].isRead").value(true));
 
