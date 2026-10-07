@@ -8,6 +8,7 @@ import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 
 import java.util.UUID;
 
@@ -31,6 +32,11 @@ class AuthenticationIntegrationTest extends IntegrationTestSupport {
     private static final String EMAIL = "test@example.com";
 
     private User user;
+
+    // /auth/reissue, /auth/logout 요청 body
+    private static String refreshTokenBody(String refreshToken) {
+        return "{\"refreshToken\": \"" + refreshToken + "\"}";
+    }
 
     @BeforeEach
     void setUp() {
@@ -111,8 +117,9 @@ class AuthenticationIntegrationTest extends IntegrationTestSupport {
 
         // when
         mockMvc.perform(post("/auth/logout")
-                        .param("accessToken", accessToken)
-                        .param("refreshToken", refreshToken))
+                        .header("Authorization", "Bearer " + accessToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshTokenBody(refreshToken)))
                 .andExpect(status().isOk());
 
         // then
@@ -130,7 +137,8 @@ class AuthenticationIntegrationTest extends IntegrationTestSupport {
 
         // when
         String response = mockMvc.perform(post(REISSUE_URL)
-                        .param("refreshToken", refreshToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshTokenBody(refreshToken)))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
@@ -153,12 +161,14 @@ class AuthenticationIntegrationTest extends IntegrationTestSupport {
         // jwt 만료시간은 초 단위라 같은 초 안에 재발급하면 이전 토큰과 똑같은 토큰이 나옴 -> 1초 뒤에 재발급
         Thread.sleep(1000);
         mockMvc.perform(post(REISSUE_URL)
-                        .param("refreshToken", oldRefreshToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshTokenBody(oldRefreshToken)))
                 .andExpect(status().isOk());
 
         // when & then
         mockMvc.perform(post(REISSUE_URL)
-                        .param("refreshToken", oldRefreshToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshTokenBody(oldRefreshToken)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(INVALID_REFRESH_TOKEN_MESSAGE));
     }
@@ -169,13 +179,15 @@ class AuthenticationIntegrationTest extends IntegrationTestSupport {
         String accessToken = jwtProvider.generateAccessToken(user.getUserId());
         String refreshToken = login();
         mockMvc.perform(post("/auth/logout")
-                        .param("accessToken", accessToken)
-                        .param("refreshToken", refreshToken))
+                        .header("Authorization", "Bearer " + accessToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshTokenBody(refreshToken)))
                 .andExpect(status().isOk());
 
         // when & then
         mockMvc.perform(post(REISSUE_URL)
-                        .param("refreshToken", refreshToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshTokenBody(refreshToken)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(INVALID_REFRESH_TOKEN_MESSAGE));
     }
@@ -188,7 +200,8 @@ class AuthenticationIntegrationTest extends IntegrationTestSupport {
 
         // when & then
         mockMvc.perform(post(REISSUE_URL)
-                        .param("refreshToken", accessToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshTokenBody(accessToken)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(INVALID_REFRESH_TOKEN_MESSAGE));
     }
@@ -201,7 +214,8 @@ class AuthenticationIntegrationTest extends IntegrationTestSupport {
 
         // when & then
         mockMvc.perform(post(REISSUE_URL)
-                        .param("refreshToken", tamperedToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshTokenBody(tamperedToken)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(INVALID_REFRESH_TOKEN_MESSAGE));
     }

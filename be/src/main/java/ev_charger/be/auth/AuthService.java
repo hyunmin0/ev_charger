@@ -24,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import tools.jackson.databind.ObjectMapper;
@@ -54,14 +55,10 @@ public class AuthService {
     @Value("${kakao.token-url:https://kauth.kakao.com/oauth/token}") // application.yml의 kakao.token-url
     private String kakaoTokenUrl;
 
-    @Value("${google.token-url}")
-    private String googleTokenUrl;
-
-    @Value("${google.client-id}")
-    private String googleClientId;
-
-    @Value("${google.redirect-uri}")
-    private String googleRedirectUri;
+    // 카카오 콘솔 > 카카오 로그인 > 보안의 Client Secret (서버에만 보관, 프론트에 두면 안 됨)
+    // 비어 있으면 client_secret 없이 교환 (콘솔에서 Client Secret을 켜기 전까지)
+    @Value("${kakao.client-secret:}")
+    private String kakaoClientSecret;
 
     /**
      * 카카오 인가코드로 로그인 (WebView에서 받은 code → 카카오 서버에서 액세스 토큰 교환 → 로그인)
@@ -80,6 +77,9 @@ public class AuthService {
         params.add("client_id", kakaoRestKey);
         params.add("redirect_uri", kakaoRedirectUri);
         params.add("code", code);
+        if (StringUtils.hasText(kakaoClientSecret)) {
+            params.add("client_secret", kakaoClientSecret);
+        }
 
         HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(params, headers);
 
@@ -102,43 +102,12 @@ public class AuthService {
     }
 
     /**
-     * 구글 인가 코드로 로그인 (프론트에서 code만 보내면 백엔드가 토큰 교환)
-     * Android 타입 OAuth 클라이언트라 client_secret 없이 교환
-     * @param code 구글 인가 코드
-     */
-    @Transactional
-    public SocialLoginResponse googleCodeLogin(String code) {
-        RestTemplate restTemplate = new RestTemplate();
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-
-        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-        body.add("grant_type", "authorization_code");
-        body.add("client_id", googleClientId);
-        body.add("redirect_uri", googleRedirectUri);
-        body.add("code", code);
-
-        Map<String, Object> tokenResponse;
-        try {
-            tokenResponse = restTemplate.postForObject(
-                    googleTokenUrl, new HttpEntity<>(body, headers), Map.class);
-        } catch (HttpClientErrorException e) {
-            // 4xx: 만료/재사용/위조된 인가 코드 등 클라이언트 요청 문제 -> 400으로 응답
-            throw new IllegalArgumentException("유효하지 않은 인가 코드");
-        }
-
-        String accessToken = (String) tokenResponse.get("access_token");
-
-        return socialLogin(accessToken, Provider.GOOGLE);
-    }
-
-    /**
      * 회원가입 및 로그인
-     * @param accessToken 로그인할 토큰
+     * @param token 로그인할 토큰 (카카오: accessToken, 구글: idToken)
      * @param provider 카카오/구글
      */
     @Transactional
-    public SocialLoginResponse socialLogin(String accessToken, Provider provider) {
+    public SocialLoginResponse socialLogin(String token, Provider provider) {
 
         // Google/Kakao 확인
         OAuthApiClient client = apiClients.stream() // list 순회
@@ -146,7 +115,7 @@ public class AuthService {
                 .findFirst() // 첫 번쨰 일치하는 클라이언트 반환(Optional)
                 .orElseThrow(() ->  new IllegalArgumentException("지원하지 않는 provider")); // 없으면 예외처리
 
-        UserInfo userInfo = client.getUserInfo(accessToken); // 유저 정보 받아오기 id, email
+        UserInfo userInfo = client.getUserInfo(token); // 유저 정보 받아오기 id, email
 
         Optional<User> existing = userRepository.findByProviderAndProviderId(provider, userInfo.id()); //우리 DB에 이 사람이 이미 있는지 확인 provider랑 id 조합으로 찾음
         if (existing.isPresent()){ // DB에 있으면 기존유저 없으면 신규유저

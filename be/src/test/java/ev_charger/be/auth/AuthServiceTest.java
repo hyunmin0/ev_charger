@@ -29,10 +29,12 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.AssertionsForClassTypes.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -184,23 +186,45 @@ public class AuthServiceTest {
     }
 
     @Test
-    void 구글_인가코드가_유효하지_않으면_예외_발생() throws IOException {
+    void 카카오_client_secret이_설정되어_있으면_토큰_교환시_함께_전송() throws IOException {
         // given
-        // 만료/재사용된 인가 코드면 구글 토큰 서버가 400(invalid_grant) 응답
-        HttpServer server = startTokenServer(400);
-        ReflectionTestUtils.setField(authService, "googleTokenUrl",
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        HttpServer server = startBodyCapturingTokenServer(requestBody);
+        ReflectionTestUtils.setField(authService, "kakaoTokenUrl",
                 "http://localhost:" + server.getAddress().getPort() + "/");
+        ReflectionTestUtils.setField(authService, "kakaoClientSecret", "test-secret");
 
-        // when & then
+        // when
         try {
-            assertThatThrownBy(() -> authService.googleCodeLogin("invalid-code"))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessage("유효하지 않은 인가 코드");
-
-            verify(oAuthApiClient, never()).getUserInfo(any());
+            assertThatThrownBy(() -> authService.kakaoCodeLogin("code"))
+                    .isInstanceOf(IllegalArgumentException.class);
         } finally {
             server.stop(0);
         }
+
+        // then
+        assertThat(requestBody.get()).contains("client_secret=test-secret");
+    }
+
+    @Test
+    void 카카오_client_secret이_없으면_client_secret_없이_전송() throws IOException {
+        // given
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        HttpServer server = startBodyCapturingTokenServer(requestBody);
+        ReflectionTestUtils.setField(authService, "kakaoTokenUrl",
+                "http://localhost:" + server.getAddress().getPort() + "/");
+        ReflectionTestUtils.setField(authService, "kakaoClientSecret", "");
+
+        // when
+        try {
+            assertThatThrownBy(() -> authService.kakaoCodeLogin("code"))
+                    .isInstanceOf(IllegalArgumentException.class);
+        } finally {
+            server.stop(0);
+        }
+
+        // then
+        assertThat(requestBody.get()).doesNotContain("client_secret");
     }
 
     @Test
@@ -448,6 +472,18 @@ public class AuthServiceTest {
         HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/", exchange -> {
             exchange.sendResponseHeaders(status, -1);
+            exchange.close();
+        });
+        server.start();
+        return server;
+    }
+
+    // 카카오 토큰 서버 흉내: 요청 body를 기록하고 400 응답
+    private HttpServer startBodyCapturingTokenServer(AtomicReference<String> requestBody) throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/", exchange -> {
+            requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            exchange.sendResponseHeaders(400, -1);
             exchange.close();
         });
         server.start();

@@ -60,9 +60,8 @@ export default function MypageScreen() {
             const accessToken = await AsyncStorage.getItem("jwt_token");
             const refreshToken = await AsyncStorage.getItem("refresh_token");
             if (accessToken && refreshToken) {
-              await api.post("/auth/logout", null, {
-                params: { accessToken, refreshToken },
-              });
+              // accessToken은 api 인터셉터가 Authorization 헤더로 붙여줌
+              await api.post("/auth/logout", { refreshToken });
             }
           } catch {
             // 서버 오류여도 로컬 로그아웃 진행

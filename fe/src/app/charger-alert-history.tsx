@@ -11,6 +11,7 @@ import api from "@/lib/api";
 type AlertHistory = {
   id: number;
   statId: string;
+  statNm: string | null; // 알림 이후 충전소가 삭제됐으면 null
   chgerId: string;
   createdAt: string;
   isRead: boolean;
@@ -80,7 +81,7 @@ const fetchHistory = useCallback(async () => {
   const renderItem = ({ item }: { item: AlertHistory }) => (
     <View style={[S.item, !item.isRead && S.itemUnread]}>
       <View style={S.itemTop}>
-        <Text style={S.stationName} numberOfLines={1}>충전소 {item.statId}</Text>
+        <Text style={S.stationName} numberOfLines={1}>{item.statNm ?? `충전소 ${item.statId}`}</Text>
         <Text style={S.timeAgo}>{formatTimeAgo(item.createdAt)}</Text>
         <TouchableOpacity
           onPress={() => deleteItem(item.id)}

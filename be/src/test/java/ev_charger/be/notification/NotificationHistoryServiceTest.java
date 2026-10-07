@@ -50,7 +50,7 @@ class NotificationHistoryServiceTest {
     @BeforeEach
     void setUp() {
         startTime = System.currentTimeMillis();
-        notificationHistoryService = new NotificationHistoryService(notificationHistoryRepository);
+        notificationHistoryService = new NotificationHistoryService(notificationHistoryRepository, stationRepository);
 
         user = User.builder()
                 .nickname("테스터")

@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, Modal, ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView, WebViewNavigation } from "react-native-webview";
+// [구글 로그인 비활성화] 다시 쓰려면 이 파일의 "[구글 로그인 비활성화]" 주석 부분을 모두 해제
 // import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
@@ -21,7 +22,8 @@ const KAKAO_AUTH_URL =
   `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_REST_API_KEY}` +
   `&redirect_uri=${encodeURIComponent(KAKAO_REDIRECT_URI)}&response_type=code`;
 
-const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? "";
+// [구글 로그인 비활성화]
+// const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? "";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -29,6 +31,7 @@ export default function LoginScreen() {
   const [oauthUrl, setOauthUrl] = useState<string | null>(null);
   const [webLoading, setWebLoading] = useState(false);
 
+  // [구글 로그인 비활성화]
   // useEffect(() => {
   //   GoogleSignin.configure({ webClientId: GOOGLE_WEB_CLIENT_ID });
   // }, []);
@@ -43,31 +46,36 @@ export default function LoginScreen() {
     setOauthUrl(null);
 
     try {
-      const loginRes = await fetch(
-        `${BACKEND_URL}/auth/login/kakao/code?code=${encodeURIComponent(code)}`,
-        { method: "POST" }
-      );
+      const loginRes = await fetch(`${BACKEND_URL}/auth/login/kakao/code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
       await handleLoginResponse(loginRes);
     } catch (e) {
       console.error("OAuth error", e);
     }
   };
 
-  const handleGoogleLogin = async () => {
-    // try {
-    //   await GoogleSignin.hasPlayServices();
-    //   await GoogleSignin.signOut();
-    //   await GoogleSignin.signIn();
-    //   const { accessToken } = await GoogleSignin.getTokens();
-    //   const loginRes = await fetch(
-    //     `${BACKEND_URL}/auth/login?accessToken=${accessToken}&provider=GOOGLE`,
-    //     { method: "POST" }
-    //   );
-    //   await handleLoginResponse(loginRes);
-    // } catch (e) {
-    //   console.error("OAuth error", e);
-    // }
-  };
+  // [구글 로그인 비활성화]
+  // const handleGoogleLogin = async () => {
+  //   try {
+  //     await GoogleSignin.hasPlayServices();
+  //     await GoogleSignin.signOut();
+  //     await GoogleSignin.signIn();
+  //     // 백엔드가 서명과 aud(웹 클라이언트 ID)를 검증하므로 accessToken이 아니라 idToken을 보냄
+  //     const { idToken } = await GoogleSignin.getTokens();
+  //     // 토큰이 서버 로그에 남지 않도록 쿼리스트링이 아닌 body로 보냄
+  //     const loginRes = await fetch(`${BACKEND_URL}/auth/login`, {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify({ token: idToken, provider: "GOOGLE" }),
+  //     });
+  //     await handleLoginResponse(loginRes);
+  //   } catch (e) {
+  //     console.error("OAuth error", e);
+  //   }
+  // };
 
   const handleLoginResponse = async (res: Response) => {
     const data = await res.json();
@@ -100,9 +108,11 @@ export default function LoginScreen() {
         <TouchableOpacity style={[S.oauthBtn, S.kakaoBtn]} onPress={() => setOauthUrl(KAKAO_AUTH_URL)}>
           <Text style={[S.oauthTxt, S.kakaoTxt]}>카카오로 로그인</Text>
         </TouchableOpacity>
+        {/* [구글 로그인 비활성화]
         <TouchableOpacity style={[S.oauthBtn, S.googleBtn]} onPress={handleGoogleLogin}>
           <Text style={[S.oauthTxt, S.googleTxt]}>구글로 로그인</Text>
         </TouchableOpacity>
+        */}
       </View>
 
       <Text style={S.notice}>

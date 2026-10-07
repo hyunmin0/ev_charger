@@ -1,59 +1,69 @@
 package ev_charger.be.auth.client;
 
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
+import com.google.api.client.http.javanet.NetHttpTransport;
+import com.google.api.client.json.JsonFactory;
+import com.google.api.client.json.gson.GsonFactory;
 import ev_charger.be.auth.dto.response.UserInfo;
+import ev_charger.be.common.exception.InternalServerException;
 import ev_charger.be.user.enums.Provider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.RestTemplate;
 
-import java.util.Map;
+import java.io.IOException;
+import java.security.GeneralSecurityException;
+import java.util.List;
 
 @Component
 public class GoogleApiClient implements OAuthApiClient{
 
-    // https://www.googleapis.com/oauth2/v3/userinfo
-    @Value("${google.api-url}")
-    private String apiUrl;
+    private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
+
+    // 구글 공개키로 idToken 서명/만료/발급자/aud 검증 (공개키는 내부에서 캐시)
+    private final GoogleIdTokenVerifier verifier;
+
+    @Autowired
+    public GoogleApiClient(
+            @Value("${spring.security.oauth2.client.registration.google.client-id}") String webClientId) {
+        this(new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), JSON_FACTORY)
+                // 우리 앱(웹 클라이언트 ID)에 발급된 토큰만 통과 -> 다른 앱의 토큰으로 로그인 차단
+                .setAudience(List.of(webClientId))
+                .build());
+    }
+
+    // 테스트에서 검증기 주입용
+    GoogleApiClient(GoogleIdTokenVerifier verifier) {
+        this.verifier = verifier;
+    }
 
     @Override
-    public UserInfo getUserInfo(String accessToken) {
+    public UserInfo getUserInfo(String idToken) {
 
-        // http 요청을 보낼 수 있는 객체 생성(외부 api 호출 시 사용)
-        RestTemplate restTemplate = new RestTemplate();
-
-        // "Authorization: Bearer 토큰값"로 요청
-        HttpHeaders headers = new HttpHeaders(); // HTTP 요청 헤더 설정
-        headers.set("Authorization", "Bearer " + accessToken);
-
-        // 실제 요청 객체 생성
-        // get 요청이므로 body 없이 header만
-        HttpEntity<Void> request = new HttpEntity<>(headers);
-
-        // map을 쓰는 이유: json 응답을 키-값으로 쉽게 접근하기 위해
-        ResponseEntity<Map<String,Object>> response;
+        // JWT 형식이 아니면 위조/잘못된 토큰 -> 400으로 응답
+        GoogleIdToken token;
         try {
-            response = restTemplate.exchange( // 서버에 get 요청 보내기 map 형태로 받음
-                    apiUrl, HttpMethod.GET, request,
-                    // ParameterizedTypeReference를 사용하여 Map의 타입을 명시
-                    new ParameterizedTypeReference<Map<String,Object>>() {});
-        } catch (HttpClientErrorException e) {
-            // 4xx: 만료/위조된 토큰 등 클라이언트 요청 문제 -> 400으로 응답
+            token = GoogleIdToken.parse(JSON_FACTORY, idToken);
+        } catch (IllegalArgumentException | IOException e) {
             throw new IllegalArgumentException("유효하지 않은 소셜 토큰");
         }
 
-        Map<String, Object> body = response.getBody();
-        String id = body.get("sub").toString();
+        boolean valid;
+        try {
+            valid = verifier.verify(token);
+        } catch (GeneralSecurityException | IOException e) {
+            // 구글 공개키를 못 가져오는 등 서버 쪽 문제 -> 500
+            throw new InternalServerException("구글 토큰 검증 중 오류가 발생했습니다.", e);
+        }
 
-        String email = body.get("email").toString();
+        // 서명 불일치/만료/aud 불일치 -> 400으로 응답
+        if (!valid) {
+            throw new IllegalArgumentException("유효하지 않은 소셜 토큰");
+        }
 
-        return new UserInfo(id, email);
-
+        GoogleIdToken.Payload payload = token.getPayload();
+        return new UserInfo(payload.getSubject(), payload.getEmail());
     }
 
     @Override

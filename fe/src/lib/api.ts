@@ -49,11 +49,7 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const res = await axios.post(
-          `${BACKEND_URL}/auth/reissue`,
-          null,
-          { params: { refreshToken } }
-        );
+        const res = await axios.post(`${BACKEND_URL}/auth/reissue`, { refreshToken });
         const { newAccessToken, newRefreshToken } = res.data; // ReissueResponse 필드명
         await AsyncStorage.multiSet([
           ["jwt_token", newAccessToken],

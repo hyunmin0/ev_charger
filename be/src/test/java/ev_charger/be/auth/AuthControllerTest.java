@@ -3,7 +3,11 @@ package ev_charger.be.auth;
 import com.nimbusds.oauth2.sdk.SuccessResponse;
 import org.springframework.http.MediaType;
 import tools.jackson.databind.ObjectMapper;
+import ev_charger.be.auth.dto.request.KakaoCodeLoginRequest;
+import ev_charger.be.auth.dto.request.LogoutRequest;
 import ev_charger.be.auth.dto.request.RegisterRequest;
+import ev_charger.be.auth.dto.request.ReissueRequest;
+import ev_charger.be.auth.dto.request.SocialLoginRequest;
 import ev_charger.be.auth.dto.response.ReissueResponse;
 import ev_charger.be.auth.dto.response.SocialLoginResponse;
 import ev_charger.be.common.exception.InternalServerException;
@@ -68,7 +72,6 @@ class AuthControllerTest {
     private static final String SOCIAL_ACCESS_TOKEN = "social-access-token";
     private static final String INVALID_SOCIAL_ACCESS_TOKEN = "invalid-social-access-token";
     private static final String KAKAO_CODE = "kakao-auth-code";
-    private static final String GOOGLE_CODE = "google-auth-code";
     private static final String INVALID_CODE = "invalid-auth-code";
 
     // 서버가 발급하는 JWT
@@ -98,6 +101,10 @@ class AuthControllerTest {
 
     private long startTime;
 
+    private String json(Object body) throws Exception {
+        return objectMapper.writeValueAsString(body);
+    }
+
     @BeforeEach
     void setUp() throws Exception {
         startTime = System.currentTimeMillis();
@@ -125,8 +132,8 @@ class AuthControllerTest {
 
         // when
         mockMvc.perform(post("/auth/login")
-                        .param("accessToken", SOCIAL_ACCESS_TOKEN)
-                        .param("provider", PROVIDER.name()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(new SocialLoginRequest(SOCIAL_ACCESS_TOKEN, PROVIDER))))
 
                 // then
                 .andExpect(status().isOk())
@@ -145,8 +152,8 @@ class AuthControllerTest {
 
         // when
         mockMvc.perform(post("/auth/login")
-                        .param("accessToken", SOCIAL_ACCESS_TOKEN)
-                        .param("provider", PROVIDER.name()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(new SocialLoginRequest(SOCIAL_ACCESS_TOKEN, PROVIDER))))
 
                 // then
                 .andExpect(status().isOk())
@@ -157,10 +164,11 @@ class AuthControllerTest {
     }
 
     @Test
-    void 소셜_로그인시_accessToken_파라미터가_없으면_400을_반환한다() throws Exception {
+    void 소셜_로그인시_token이_없으면_400을_반환한다() throws Exception {
         // when
         mockMvc.perform(post("/auth/login")
-                        .param("provider", PROVIDER.name()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(new SocialLoginRequest(null, PROVIDER))))
 
                 // then
                 .andExpect(status().isBadRequest());
@@ -169,10 +177,11 @@ class AuthControllerTest {
     }
 
     @Test
-    void 소셜_로그인시_provider_파라미터가_없으면_400을_반환한다() throws Exception {
+    void 소셜_로그인시_provider가_없으면_400을_반환한다() throws Exception {
         // when
         mockMvc.perform(post("/auth/login")
-                        .param("accessToken", SOCIAL_ACCESS_TOKEN))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(new SocialLoginRequest(SOCIAL_ACCESS_TOKEN, null))))
 
                 // then
                 .andExpect(status().isBadRequest());
@@ -184,8 +193,8 @@ class AuthControllerTest {
     void 소셜_로그인시_지원하지_않는_provider면_400을_반환한다() throws Exception {
         // when
         mockMvc.perform(post("/auth/login")
-                        .param("accessToken", SOCIAL_ACCESS_TOKEN)
-                        .param("provider", "FACEBOOK"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"token\": \"" + SOCIAL_ACCESS_TOKEN + "\", \"provider\": \"FACEBOOK\"}"))
 
                 // then
                 .andExpect(status().isBadRequest());
@@ -200,15 +209,29 @@ class AuthControllerTest {
 
         // when
         mockMvc.perform(post("/auth/login")
-                        .param("accessToken", INVALID_SOCIAL_ACCESS_TOKEN)
-                        .param("provider", PROVIDER.name()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(new SocialLoginRequest(INVALID_SOCIAL_ACCESS_TOKEN, PROVIDER))))
 
                 // then
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("유효하지 않은 소셜 토큰"));
 
-        // 파라미터 검증은 통과해서 서비스는 호출됐고, 서비스 안에서 예외가 발생함
+        // 요청 검증은 통과해서 서비스는 호출됐고, 서비스 안에서 예외가 발생함
         verify(authService).socialLogin(INVALID_SOCIAL_ACCESS_TOKEN, PROVIDER);
+    }
+
+    @Test
+    void 소셜_로그인시_토큰을_쿼리스트링으로_보내면_400을_반환한다() throws Exception {
+        // when
+        // 예전 방식(?accessToken=...&provider=...)은 body가 없어서 거절됨
+        mockMvc.perform(post("/auth/login")
+                        .param("accessToken", SOCIAL_ACCESS_TOKEN)
+                        .param("provider", PROVIDER.name()))
+
+                // then
+                .andExpect(status().isBadRequest());
+
+        verify(authService, never()).socialLogin(any(), any());
     }
 
     // ========== POST /auth/register ==========
@@ -302,8 +325,9 @@ class AuthControllerTest {
     void 로그아웃_성공시_200을_반환한다() throws Exception {
         // when
         mockMvc.perform(post("/auth/logout")
-                .param("accessToken", JWT_ACCESS_TOKEN)
-                .param("refreshToken", JWT_REFRESH_TOKEN))
+                .header("Authorization", "Bearer " + JWT_ACCESS_TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json(new LogoutRequest(JWT_REFRESH_TOKEN))))
 
         // then
                 .andExpect(status().isOk());
@@ -312,10 +336,12 @@ class AuthControllerTest {
     }
 
     @Test
-    void 로그아웃시_refreshToken_파라미터가_없으면_400을_반환한다() throws Exception {
+    void 로그아웃시_refreshToken이_없으면_400을_반환한다() throws Exception {
         // when
         mockMvc.perform(post("/auth/logout")
-                        .param("accessToken", JWT_ACCESS_TOKEN))
+                        .header("Authorization", "Bearer " + JWT_ACCESS_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(new LogoutRequest(null))))
 
                 // then
                 .andExpect(status().isBadRequest());
@@ -330,14 +356,43 @@ class AuthControllerTest {
 
         // when
         mockMvc.perform(post("/auth/logout")
-                        .param("accessToken", JWT_ACCESS_TOKEN)
-                        .param("refreshToken", INVALID_REFRESH_TOKEN))
+                        .header("Authorization", "Bearer " + JWT_ACCESS_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(new LogoutRequest(INVALID_REFRESH_TOKEN))))
 
                 // then
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("유효하지 않은 refresh token"));
 
         verify(authService).logout(JWT_ACCESS_TOKEN, INVALID_REFRESH_TOKEN);
+    }
+
+    @Test
+    void 로그아웃시_Authorization_헤더가_없으면_400을_반환한다() throws Exception {
+        // when
+        mockMvc.perform(post("/auth/logout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(new LogoutRequest(JWT_REFRESH_TOKEN))))
+
+                // then
+                .andExpect(status().isBadRequest());
+
+        verify(authService, never()).logout(any(), any());
+    }
+
+    @Test
+    void 로그아웃시_Authorization_헤더가_Bearer_형식이_아니면_400을_반환한다() throws Exception {
+        // when
+        mockMvc.perform(post("/auth/logout")
+                        .header("Authorization", JWT_ACCESS_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(new LogoutRequest(JWT_REFRESH_TOKEN))))
+
+                // then
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("유효하지 않은 access token"));
+
+        verify(authService, never()).logout(any(), any());
     }
 
     // ========== POST /auth/reissue ==========
@@ -350,7 +405,8 @@ class AuthControllerTest {
 
         // when
         mockMvc.perform(post("/auth/reissue")
-                .param("refreshToken", JWT_REFRESH_TOKEN))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json(new ReissueRequest(JWT_REFRESH_TOKEN))))
 
         // then
                 .andExpect(status().isOk())
@@ -361,9 +417,11 @@ class AuthControllerTest {
     }
 
     @Test
-    void 토큰_재발급시_refreshToken_파라미터가_없으면_400을_반환한다() throws Exception {
+    void 토큰_재발급시_refreshToken이_없으면_400을_반환한다() throws Exception {
         // when
-        mockMvc.perform(post("/auth/reissue"))
+        mockMvc.perform(post("/auth/reissue")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(new ReissueRequest(null))))
 
                 // then
                 .andExpect(status().isBadRequest())
@@ -380,7 +438,8 @@ class AuthControllerTest {
 
         // when
         mockMvc.perform(post("/auth/reissue")
-                        .param("refreshToken", INVALID_REFRESH_TOKEN))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(new ReissueRequest(INVALID_REFRESH_TOKEN))))
 
                 // then
                 .andExpect(status().isBadRequest())
@@ -399,7 +458,8 @@ class AuthControllerTest {
 
         // when
         mockMvc.perform(post("/auth/login/kakao/code")
-                .param("code", KAKAO_CODE))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json(new KakaoCodeLoginRequest(KAKAO_CODE))))
 
         // then
                 .andExpect(status().isOk())
@@ -417,7 +477,8 @@ class AuthControllerTest {
 
         // when
         mockMvc.perform(post("/auth/login/kakao/code")
-                .param("code", KAKAO_CODE))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json(new KakaoCodeLoginRequest(KAKAO_CODE))))
 
         // then
                 .andExpect(status().isOk())
@@ -428,9 +489,11 @@ class AuthControllerTest {
     }
 
     @Test
-    void 카카오_인가코드_로그인시_code_파라미터가_없으면_400을_반환한다() throws Exception {
+    void 카카오_인가코드_로그인시_code가_없으면_400을_반환한다() throws Exception {
         // when
-        mockMvc.perform(post("/auth/login/kakao/code"))
+        mockMvc.perform(post("/auth/login/kakao/code")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(new KakaoCodeLoginRequest(null))))
 
         // then
                 .andExpect(status().isBadRequest())
@@ -447,78 +510,13 @@ class AuthControllerTest {
 
         // when
         mockMvc.perform(post("/auth/login/kakao/code")
-                        .param("code", INVALID_CODE))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(new KakaoCodeLoginRequest(INVALID_CODE))))
 
         // then
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("유효하지 않은 인가 코드"));
 
         verify(authService).kakaoCodeLogin(INVALID_CODE);
-    }
-
-    // ========== POST /auth/google/token ==========
-
-    @Test
-    void 구글_인가코드_로그인_성공시_200과_토큰을_반환한다() throws Exception {
-        // given
-        given(authService.googleCodeLogin(GOOGLE_CODE))
-                .willReturn(successResponse);
-
-        // when
-        mockMvc.perform(post("/auth/google/token")
-                        .param("code", GOOGLE_CODE))
-
-        // then
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("SUCCESS"))
-                .andExpect(jsonPath("$.accessToken").value(JWT_ACCESS_TOKEN))
-                .andExpect(jsonPath("$.refreshToken").value(JWT_REFRESH_TOKEN));
-
-        verify(authService).googleCodeLogin(GOOGLE_CODE);
-    }
-
-    @Test
-    void 구글_인가코드_로그인시_신규_사용자면_200과_tempToken을_반환한다() throws Exception {
-        // given
-        given(authService.googleCodeLogin(GOOGLE_CODE))
-                .willReturn(needProfileResponse);
-
-        // when
-        mockMvc.perform(post("/auth/google/token")
-                        .param("code", GOOGLE_CODE))
-
-        // then
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("NEED_PROFILE_SELECT"))
-                .andExpect(jsonPath("$.tempToken").value(TEMP_TOKEN));
-
-        verify(authService).googleCodeLogin(GOOGLE_CODE);
-    }
-
-    @Test
-    void 구글_인가코드_로그인시_code_파라미터가_없으면_400을_반환한다() throws Exception {
-        // when
-        mockMvc.perform(post("/auth/google/token"))
-
-        // then
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("잘못된 요청입니다."));
-    }
-
-    @Test
-    void 구글_인가코드_로그인시_유효하지_않은_code면_400을_반환한다() throws Exception {
-        // given
-        given(authService.googleCodeLogin(INVALID_CODE))
-                .willThrow(new IllegalArgumentException("유효하지 않은 인가 코드"));
-
-        // when
-        mockMvc.perform(post("/auth/google/token")
-                        .param("code", INVALID_CODE))
-
-                // then
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("유효하지 않은 인가 코드"));
-
-        verify(authService).googleCodeLogin(INVALID_CODE);
     }
 }

@@ -1,112 +1,107 @@
 package ev_charger.be.auth.client;
 
-import com.sun.net.httpserver.HttpServer;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import ev_charger.be.auth.dto.response.UserInfo;
+import ev_charger.be.common.exception.InternalServerException;
 import ev_charger.be.user.enums.Provider;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.web.client.RestClientException;
+import org.junit.jupiter.api.TestInfo;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 class GoogleApiClientTest {
 
-    private HttpServer server;
+    private GoogleIdTokenVerifier verifier;
     private GoogleApiClient googleApiClient;
-    private String receivedAuthHeader;
     private long startTime;
 
     @BeforeEach
-    void setUp() throws IOException {
+    void setUp() {
         startTime = System.currentTimeMillis();
-        server = HttpServer.create(new InetSocketAddress(0), 0);
-        googleApiClient = new GoogleApiClient();
+        verifier = mock(GoogleIdTokenVerifier.class);
+        googleApiClient = new GoogleApiClient(verifier);
     }
 
     @AfterEach
     void tearDown(TestInfo testInfo) {
-        server.stop(0);
         System.out.println(testInfo.getDisplayName() + " 경과 시간: " + (System.currentTimeMillis() - startTime) + "ms");
     }
 
-    // 구글 서버 흉내: 요청 헤더 기록하고 지정된 JSON을 200으로 응답
-    private void stubResponse(String json) throws IOException {
-        server.createContext("/", exchange -> {
-            receivedAuthHeader = exchange.getRequestHeaders().getFirst("Authorization");
-            byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
-            exchange.getResponseHeaders().set("Content-Type", "application/json");
-            exchange.sendResponseHeaders(200, bytes.length);
-            exchange.getResponseBody().write(bytes);
-            exchange.close();
-        });
-        server.start();
-        ReflectionTestUtils.setField(googleApiClient, "apiUrl",
-                "http://localhost:" + server.getAddress().getPort() + "/");
+    // header.payload.signature 형식의 idToken 생성 (서명 검증은 verifier mock이 담당)
+    private String idToken(String payloadJson) {
+        Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
+        return encoder.encodeToString("{\"alg\":\"RS256\",\"typ\":\"JWT\"}".getBytes(StandardCharsets.UTF_8))
+                + "." + encoder.encodeToString(payloadJson.getBytes(StandardCharsets.UTF_8))
+                + "." + encoder.encodeToString("signature".getBytes(StandardCharsets.UTF_8));
     }
 
     @Test
-    void 정상_응답이면_sub와_email로_UserInfo_생성() throws IOException {
-        stubResponse("""
+    void 검증된_idToken이면_sub와_email로_UserInfo_생성() throws Exception {
+        // given
+        given(verifier.verify(any(GoogleIdToken.class))).willReturn(true);
+
+        // when
+        UserInfo userInfo = googleApiClient.getUserInfo(idToken("""
                 {"sub": "1234567890", "email": "test@gmail.com"}
-                """);
+                """));
 
-        UserInfo userInfo = googleApiClient.getUserInfo("test-token");
-
+        // then
         assertThat(userInfo.id()).isEqualTo("1234567890");
         assertThat(userInfo.email()).isEqualTo("test@gmail.com");
     }
 
     @Test
-    void Authorization_헤더에_Bearer_토큰_포함해서_요청() throws IOException {
-        stubResponse("""
-                {"sub": "1234567890", "email": "test@gmail.com"}
-                """);
+    void 검증_실패면_IllegalArgumentException_발생() throws Exception {
+        // given
+        // 서명 불일치, 만료, 다른 앱에 발급된 토큰(aud 불일치)이면 verify가 false 반환
+        given(verifier.verify(any(GoogleIdToken.class))).willReturn(false);
 
-        googleApiClient.getUserInfo("my-access-token");
-
-        assertThat(receivedAuthHeader).isEqualTo("Bearer my-access-token");
-    }
-
-    @Test
-    void getProvider_는_GOOGLE_반환() {
-        assertThat(googleApiClient.getProvider()).isEqualTo(Provider.GOOGLE);
-    }
-
-    @Test
-    void 토큰이_유효하지_않아_401_응답이면_IllegalArgumentException_발생() throws IOException {
-        // 만료/위조된 토큰이면 소셜 서버가 401 응답 -> 400으로 응답하도록 IllegalArgumentException으로 변환
-        server.createContext("/", exchange -> {
-            exchange.sendResponseHeaders(401, -1);
-            exchange.close();
-        });
-        server.start();
-        ReflectionTestUtils.setField(googleApiClient, "apiUrl",
-                "http://localhost:" + server.getAddress().getPort() + "/");
-
-        assertThatThrownBy(() -> googleApiClient.getUserInfo("invalid-token"))
+        // when & then
+        assertThatThrownBy(() -> googleApiClient.getUserInfo(idToken("""
+                {"sub": "1234567890", "email": "test@gmail.com", "aud": "other-app"}
+                """)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("유효하지 않은 소셜 토큰");
     }
 
     @Test
-    void 서버_에러_응답이면_예외_전파() throws IOException {
-        server.createContext("/", exchange -> {
-            exchange.sendResponseHeaders(500, -1);
-            exchange.close();
-        });
-        server.start();
-        ReflectionTestUtils.setField(googleApiClient, "apiUrl",
-                "http://localhost:" + server.getAddress().getPort() + "/");
+    void JWT_형식이_아니면_IllegalArgumentException_발생() throws Exception {
+        // when & then
+        // 예전 방식의 accessToken 등 JWT가 아닌 값
+        assertThatThrownBy(() -> googleApiClient.getUserInfo("ya29.not-a-jwt"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("유효하지 않은 소셜 토큰");
 
-        assertThatThrownBy(() -> googleApiClient.getUserInfo("test-token"))
-                .isInstanceOf(RestClientException.class);
+        verify(verifier, never()).verify(any(GoogleIdToken.class));
+    }
+
+    @Test
+    void 구글_공개키_조회_실패면_InternalServerException_발생() throws Exception {
+        // given
+        given(verifier.verify(any(GoogleIdToken.class))).willThrow(new IOException("network"));
+
+        // when & then
+        assertThatThrownBy(() -> googleApiClient.getUserInfo(idToken("""
+                {"sub": "1234567890", "email": "test@gmail.com"}
+                """)))
+                .isInstanceOf(InternalServerException.class);
+    }
+
+    @Test
+    void getProvider_는_GOOGLE_반환() {
+        assertThat(googleApiClient.getProvider()).isEqualTo(Provider.GOOGLE);
     }
 }
