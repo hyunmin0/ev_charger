@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "@/lib/api";
 
@@ -37,21 +38,25 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
-  useEffect(() => {
-    (async () => {
-      // 내 차량 목록 가져오기
-      try {
-        const res = await api.get("/user/cars");
-        const cars: CarOption[] = [
-          { label: "선택 안함", carId: null },
-          ...(res.data ?? []).map((c: any) => ({ label: c.carName, carId: c.carId })),
-        ];
-        setCarList(cars);
-      } catch {
-        // 차량 목록 못 불러와도 계속 진행
-      }
-    })();
-  }, []);
+  // 탭 화면은 계속 마운트돼 있어서, 계정 탭에서 차량을 추가·삭제해도 반영되도록 들어올 때마다 다시 불러옴
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        try {
+          const res = await api.get("/user/cars");
+          const cars: CarOption[] = [
+            { label: "선택 안함", carId: null },
+            ...(res.data ?? []).map((c: any) => ({ label: c.carName, carId: c.carId })),
+          ];
+          setCarList(cars);
+          // 선택했던 차가 삭제됐으면 선택 해제
+          setSelectedCar(prev => cars.some(c => c.carId === prev.carId) ? prev : cars[0]);
+        } catch {
+          // 차량 목록 못 불러와도 계속 진행
+        }
+      })();
+    }, [])
+  );
 
   const send = async () => {
     const text = input.trim();

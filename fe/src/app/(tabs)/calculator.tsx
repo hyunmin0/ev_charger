@@ -1,10 +1,11 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   TextInput, PanResponder,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "expo-router";
 import api from "@/lib/api";
 
 const ACCENT = "#5B9CF6";
@@ -117,21 +118,25 @@ export default function CalculatorScreen() {
   const [result, setResult] = useState<string | null>(null);
 
   // 로그인된 경우 내 차 목록 상단에 추가
-  useEffect(() => {
-    api.get<{ userCarId: string; carId: number; carName: string; batteryCapacity: number }[]>("/user/cars")
-      .then(res => {
-        if (res.data.length > 0) {
+  // 탭 화면은 계속 마운트돼 있어서, 계정 탭에서 차량을 추가·삭제해도 반영되도록 들어올 때마다 다시 불러옴
+  useFocusEffect(
+    useCallback(() => {
+      api.get<{ userCarId: string; carId: number; carName: string; batteryCapacity: number }[]>("/user/cars")
+        .then(res => {
           const myCars: CarOption[] = res.data.map(c => ({
             label: `⭐ ${c.carName}`,
             capacity: c.batteryCapacity,
             isMine: true,
             carId: c.carId,
           }));
-          setCarOptions([BASE_CARS[0], ...myCars, ...BASE_CARS.slice(1)]);
-        }
-      })
-      .catch(() => {}); // 비로그인이면 무시
-  }, []);
+          const options = [BASE_CARS[0], ...myCars, ...BASE_CARS.slice(1)];
+          setCarOptions(options);
+          // 선택했던 내 차가 삭제됐으면 선택 해제
+          setCar(prev => options.some(c => c.label === prev) ? prev : BASE_CARS[0].label);
+        })
+        .catch(() => {}); // 비로그인이면 무시
+    }, [])
+  );
 
   // 내 차 선택 시 기준 충전 데이터 가져오기
   useEffect(() => {
