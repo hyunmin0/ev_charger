@@ -69,7 +69,14 @@ const predColor = (p: string | null) =>
 // window.map으로 전역 선언해야 injectJavaScript에서 접근 가능
 const mapHTML = `<!DOCTYPE html><html><head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>* { margin:0; padding:0; } html,body,#map { width:100%; height:100%; }</style>
+<style>
+* { margin:0; padding:0; }
+html,body,#map { width:100%; height:100%; }
+.loc-wrap { position:relative; width:50px; height:50px; display:flex; align-items:center; justify-content:center; }
+.loc-pulse { position:absolute; width:50px; height:50px; border-radius:50%; background:rgba(74,144,226,0.2); }
+.loc-dot { width:14px; height:14px; border-radius:50%; background:#4A90E2; border:2.5px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,0.25); position:relative; z-index:1; }
+@keyframes lp { 0%{transform:scale(0.3);opacity:0.9} 100%{transform:scale(1);opacity:0} }
+</style>
 </head><body><div id="map"></div>
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_API_KEY}&autoload=false"></script>
 <script>kakao.maps.load(function() {
@@ -80,6 +87,22 @@ const mapHTML = `<!DOCTYPE html><html><head>
     var center = window.map.getCenter();
     window.ReactNativeWebView.postMessage(JSON.stringify({ lat: center.getLat(), lng: center.getLng() }));
   });
+  window.moveToMyLocation = function(lat, lng) {
+    var pos = new kakao.maps.LatLng(lat, lng);
+    window.map.panTo(pos);
+    if (window.myLocationDot) {
+      window.myLocationDot.setPosition(pos);
+    } else {
+      window.myLocationDot = new kakao.maps.CustomOverlay({
+        position: pos,
+        content: '<div class="loc-wrap"><div class="loc-pulse"></div><div class="loc-dot"></div></div>',
+        xAnchor: 0.5,
+        yAnchor: 0.5,
+        zIndex: 10
+      });
+      window.myLocationDot.setMap(window.map);
+    }
+  };
 });</script></body></html>`;
 
 function StepSlider({ steps, value, onChange }: { steps: string[]; value: number; onChange: (i: number) => void }) {
@@ -142,6 +165,13 @@ export default function HomeScreen() {
   // 마운트 시 두 번째 useEffect 중복 fetch 방지
   const isInitialMount = useRef(true);
 
+  // 현재 위치 파란 점 표시 + 지도 이동
+  const moveToUserLocation = useCallback((lat: number, lng: number) => {
+    webviewRef.current?.injectJavaScript(
+      `window.moveToMyLocation(${lat}, ${lng}); true;`
+    );
+  }, []);
+
   const [sheetVisible, setSheetVisible] = useState(false);
   const [popupChip, setPopupChip] = useState<string | null>(null);
   const slideAnim = useRef(new Animated.Value(SHEET_HEIGHT)).current;
@@ -187,11 +217,9 @@ export default function HomeScreen() {
         const loc = await Location.getCurrentPositionAsync({});
         userLat.current = loc.coords.latitude;
         userLng.current = loc.coords.longitude;
-        // 맵이 이미 로드됐으면 바로 이동, 아니면 대기열에 저장
+        // 맵이 이미 로드됐으면 바로 이동+마커, 아니면 대기열에 저장
         if (mapLoaded.current) {
-          webviewRef.current?.injectJavaScript(
-            `window.map.panTo(new kakao.maps.LatLng(${loc.coords.latitude}, ${loc.coords.longitude})); true;`
-          );
+          moveToUserLocation(loc.coords.latitude, loc.coords.longitude);
         } else {
           pendingLocation.current = { lat: loc.coords.latitude, lng: loc.coords.longitude };
         }
@@ -334,12 +362,10 @@ export default function HomeScreen() {
         javaScriptEnabled
         domStorageEnabled
         onLoadEnd={() => {
-          // 카카오 SDK 로드 완료 후 대기 중인 위치가 있으면 이동
+          // 카카오 SDK 로드 완료 후 대기 중인 위치가 있으면 이동+마커
           mapLoaded.current = true;
           if (pendingLocation.current) {
-            webviewRef.current?.injectJavaScript(
-              `window.map.panTo(new kakao.maps.LatLng(${pendingLocation.current.lat}, ${pendingLocation.current.lng})); true;`
-            );
+            moveToUserLocation(pendingLocation.current.lat, pendingLocation.current.lng);
             pendingLocation.current = null;
           }
         }}
