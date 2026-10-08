@@ -135,6 +135,24 @@ class ChargerAlertServiceTest {
     }
 
     @Test
+    void 충전대기_충전기면_추가시_예외_발생() {
+        // given
+        String statId = "ST1";
+        String chgerId = "01";
+        Charger charger = mock(Charger.class);
+
+        given(chargerRepository.findByStatIdAndChgerId(statId, chgerId)).willReturn(Optional.of(charger));
+        given(charger.getChgerStat()).willReturn(ChgerStat.WAITING);
+
+        // when & then
+        assertThatThrownBy(() -> chargerAlertService.addChargerAlert(user, statId, chgerId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("이미 사용 가능한 충전기입니다.");
+
+        verify(chargerAlertRepository, never()).save(any());
+    }
+
+    @Test
     void 알림_삭제_성공() {
         // given
         String statId = "ST1";

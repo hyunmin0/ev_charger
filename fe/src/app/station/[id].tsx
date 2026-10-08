@@ -350,21 +350,24 @@ export default function StationDetailScreen() {
                   <Text style={[styles.chargerStatus, { color: cfg.color }]}>{cfg.label}</Text>
                   <Text style={styles.chargerType}>{CHGER_TYPE_LABEL[c.chgerType] ?? c.chgerType}</Text>
                   <Text style={styles.chargerSpeed}>충전 출력 {c.output ?? "-"}</Text>
-                  <TouchableOpacity
-                    style={styles.bellBtn}
-                    onPress={() => toggleAlert(c)}
-                    disabled={alertLoading.has(c.chgerId)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    {alertLoading.has(c.chgerId)
-                      ? <ActivityIndicator size="small" color="#5B9CF6" />
-                      : <Ionicons
-                          name={c.isAlert ? "notifications" : "notifications-outline"}
-                          size={18}
-                          color={c.isAlert ? "#5B9CF6" : "#bbb"}
-                        />
-                    }
-                  </TouchableOpacity>
+                  {/* 충전대기는 알림이 필요 없음. 이미 걸린 알림은 해제할 수 있게 남겨 둠 */}
+                  {(key !== "available" || c.isAlert) && (
+                    <TouchableOpacity
+                      style={styles.bellBtn}
+                      onPress={() => toggleAlert(c)}
+                      disabled={alertLoading.has(c.chgerId)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      {alertLoading.has(c.chgerId)
+                        ? <ActivityIndicator size="small" color="#5B9CF6" />
+                        : <Ionicons
+                            name={c.isAlert ? "notifications" : "notifications-outline"}
+                            size={18}
+                            color={c.isAlert ? "#5B9CF6" : "#bbb"}
+                          />
+                      }
+                    </TouchableOpacity>
+                  )}
                 </View>
               );
             })}

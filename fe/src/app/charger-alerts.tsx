@@ -122,7 +122,12 @@ export default function ChargerAlertsScreen() {
               station.openToPublic ? "개방" : "비개방",
             ];
             return (
-              <View key={station.statId} style={S.card}>
+              <TouchableOpacity
+                key={station.statId}
+                style={S.card}
+                activeOpacity={0.7}
+                onPress={() => router.push(`/station/${station.statId}` as any)}
+              >
                 <View style={S.stationTop}>
                   <Text style={S.stationName} numberOfLines={2}>{station.statNm}</Text>
                   <Text style={S.operator}>{station.busiNm}</Text>
@@ -164,7 +169,7 @@ export default function ChargerAlertsScreen() {
                     </View>
                   );
                 })}
-              </View>
+              </TouchableOpacity>
             );
           })}
         </ScrollView>

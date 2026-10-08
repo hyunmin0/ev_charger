@@ -9,6 +9,7 @@ import ev_charger.be.notification.NotificationHistoryService;
 import ev_charger.be.station.Station;
 import ev_charger.be.station.charger.Charger;
 import ev_charger.be.station.charger.ChargerRepository;
+import ev_charger.be.station.charger.enums.ChgerStat;
 import ev_charger.be.station.charger.enums.ChgerType;
 import ev_charger.be.station.enums.FloorType;
 import ev_charger.be.station.enums.Kind;
@@ -45,6 +46,11 @@ public class ChargerAlertService {
     public void addChargerAlert(User user, String statId, String chgerId) {
         Charger charger = chargerRepository.findByStatIdAndChgerId(statId, chgerId)
                 .orElseThrow(() -> new IllegalArgumentException("충전소 또는 충전기가 유효하지 않습니다."));
+
+        // 알림은 충전대기로 바뀔 때 보내므로 이미 충전대기인 충전기는 등록할 필요 없음
+        if (charger.getChgerStat() == ChgerStat.WAITING) {
+            throw new IllegalArgumentException("이미 사용 가능한 충전기입니다.");
+        }
 
         if (chargerAlertRepository.existsByUserAndCharger(user, charger)) {
             throw new IllegalArgumentException("이미 등록된 알림입니다.");
