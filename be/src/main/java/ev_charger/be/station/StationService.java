@@ -17,10 +17,12 @@ import ev_charger.be.station.congestion.CongestionRepository;
 import ev_charger.be.station.dto.request.MapBoundsRequest;
 import ev_charger.be.station.dto.request.NearbyStationRequest;
 import ev_charger.be.station.dto.response.NearbyStationPageResponse;
+import ev_charger.be.station.dto.response.RegionSummaryResponse;
 import ev_charger.be.station.dto.response.StationDetailResponse;
 import ev_charger.be.station.dto.response.StationResponse;
 import ev_charger.be.station.enums.FloorType;
 import ev_charger.be.station.enums.Kind;
+import ev_charger.be.station.enums.RegionLevel;
 import ev_charger.be.station.stationOperator.StationOperator;
 import ev_charger.be.user.User;
 import jakarta.annotation.Nullable;
@@ -29,8 +31,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -45,6 +50,15 @@ public class StationService {
     private final ReviewService reviewService;
     private final FavoriteRepository favoriteRepository;
     private final CongestionRepository congestionRepository;
+
+    // 지도 화면 조회 상한. 줌아웃하면 화면 안 충전소가 수만 곳(수 MB)이 돼서 화면 중심에서 가까운 곳만 보냄
+    static final int MAX_BOUNDS_STATIONS = 500;
+
+    // 지역 요약은 전국 집계라 1~2초 걸리고 거의 안 바뀜 -> 충전기 상태 수집 주기(5분)만큼 재사용
+    static final Duration REGION_CACHE_TTL = Duration.ofMinutes(5);
+    private final Map<RegionLevel, CachedRegions> regionCache = new ConcurrentHashMap<>();
+
+    private record CachedRegions(List<RegionSummaryResponse> regions, Instant cachedAt) {}
 
     /**
      * 가까운 충전소 찾기
@@ -69,7 +83,24 @@ public class StationService {
      * @return 충전소id, 이름, 주소, 위경도, 운영시간, 총 충전기수, 거리, 필터들
      */
     public List<StationResponse> getStationsInBounds(MapBoundsRequest request) {
-        return stationRepository.findStationsInBoundsWithFilter(request);
+        return stationRepository.findStationsInBoundsWithFilter(request, MAX_BOUNDS_STATIONS);
+    }
+
+    /**
+     * 지역별 충전소 요약 (지도를 줌아웃했을 때)
+     * @param level SIDO: 시·도, CITY: 도 안의 시·군 + 광역시
+     * @return 지역 키, 이름, 충전소 수, 이용 가능 충전소 수, 표시 위치
+     */
+    public List<RegionSummaryResponse> getRegionSummaries(RegionLevel level) {
+        CachedRegions cached = regionCache.get(level);
+        if (cached == null || Instant.now().isAfter(cached.cachedAt().plus(REGION_CACHE_TTL))) {
+            List<RegionSummaryResponse> regions = level == RegionLevel.SIDO
+                    ? stationRepository.findRegionSummaries()
+                    : stationRepository.findCitySummaries();
+            cached = new CachedRegions(regions, Instant.now());
+            regionCache.put(level, cached);
+        }
+        return cached.regions();
     }
 
     /**

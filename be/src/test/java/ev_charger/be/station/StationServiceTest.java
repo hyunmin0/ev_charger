@@ -18,10 +18,12 @@ import ev_charger.be.station.congestion.CongestionRepository;
 import ev_charger.be.station.dto.request.MapBoundsRequest;
 import ev_charger.be.station.dto.request.NearbyStationRequest;
 import ev_charger.be.station.dto.response.NearbyStationPageResponse;
+import ev_charger.be.station.dto.response.RegionSummaryResponse;
 import ev_charger.be.station.dto.response.StationDetailResponse;
 import ev_charger.be.station.dto.response.StationResponse;
 import ev_charger.be.station.enums.FloorType;
 import ev_charger.be.station.enums.Kind;
+import ev_charger.be.station.enums.RegionLevel;
 import ev_charger.be.station.stationOperator.StationOperator;
 import ev_charger.be.user.User;
 import ev_charger.be.user.enums.Provider;
@@ -47,6 +49,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -258,13 +261,52 @@ public class StationServiceTest {
                 )
         );
 
-        given(stationRepository.findStationsInBoundsWithFilter(request)).willReturn(stations);
+        given(stationRepository.findStationsInBoundsWithFilter(request, StationService.MAX_BOUNDS_STATIONS)).willReturn(stations);
 
         // when
        List<StationResponse> response =  stationService.getStationsInBounds(request);
 
         // then
         assertThat(response).isEqualTo(stations);
+    }
+
+    @Test
+    void 시도_요약은_한_번_조회한_뒤_캐시를_재사용한다() {
+        // given
+        List<RegionSummaryResponse> regions = List.of(
+                new RegionSummaryResponse("11", "서울", 12926, 11072, 37.5441, 127.0078));
+        given(stationRepository.findRegionSummaries()).willReturn(regions);
+
+        // when: 캐시 유효 시간 안에 두 번 호출
+        List<RegionSummaryResponse> first = stationService.getRegionSummaries(RegionLevel.SIDO);
+        List<RegionSummaryResponse> second = stationService.getRegionSummaries(RegionLevel.SIDO);
+
+        // then: DB 집계는 한 번만
+        assertThat(first).isEqualTo(regions);
+        assertThat(second).isEqualTo(regions);
+        verify(stationRepository, times(1)).findRegionSummaries();
+    }
+
+    @Test
+    void 시군_요약은_시도_요약과_따로_조회하고_캐시한다() {
+        // given
+        List<RegionSummaryResponse> sido = List.of(
+                new RegionSummaryResponse("41", "경기", 24997, 20516, 37.3879, 127.0543));
+        List<RegionSummaryResponse> city = List.of(
+                new RegionSummaryResponse("4111", "수원시", 1939, 1600, 37.271, 127.028));
+        given(stationRepository.findRegionSummaries()).willReturn(sido);
+        given(stationRepository.findCitySummaries()).willReturn(city);
+
+        // when
+        List<RegionSummaryResponse> sidoResult = stationService.getRegionSummaries(RegionLevel.SIDO);
+        List<RegionSummaryResponse> cityResult = stationService.getRegionSummaries(RegionLevel.CITY);
+        stationService.getRegionSummaries(RegionLevel.CITY);
+
+        // then: 단위별로 다른 결과, 각각 한 번만 집계
+        assertThat(sidoResult).isEqualTo(sido);
+        assertThat(cityResult).isEqualTo(city);
+        verify(stationRepository, times(1)).findRegionSummaries();
+        verify(stationRepository, times(1)).findCitySummaries();
     }
 
     @Test

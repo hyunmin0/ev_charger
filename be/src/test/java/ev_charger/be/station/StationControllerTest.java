@@ -10,6 +10,8 @@ import ev_charger.be.station.congestion.CongestionLevel;
 import ev_charger.be.station.dto.request.MapBoundsRequest;
 import ev_charger.be.station.dto.request.NearbyStationRequest;
 import ev_charger.be.station.dto.response.NearbyStationPageResponse;
+import ev_charger.be.station.dto.response.RegionSummaryResponse;
+import ev_charger.be.station.enums.RegionLevel;
 import ev_charger.be.station.dto.response.StationDetailResponse;
 import ev_charger.be.station.dto.response.StationResponse;
 import ev_charger.be.user.User;
@@ -275,6 +277,57 @@ class StationControllerTest {
                 .andExpect(status().isBadRequest());
 
         verify(stationService, never()).getNearbyStations(any());
+    }
+
+    // ========== GET /stations/regions ==========
+
+    @Test
+    void 시도_요약_조회시_로그인_없이_200과_시도별_요약을_반환한다() throws Exception {
+        // given
+        given(stationService.getRegionSummaries(RegionLevel.SIDO)).willReturn(List.of(
+                new RegionSummaryResponse("11", "서울", 12926, 11072, 37.5441, 127.0078)));
+
+        // when
+        mockMvc.perform(get("/stations/regions"))
+
+        // then
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].code").value("11"))
+                .andExpect(jsonPath("$[0].name").value("서울"))
+                .andExpect(jsonPath("$[0].stationCount").value(12926))
+                .andExpect(jsonPath("$[0].availableStationCount").value(11072))
+                .andExpect(jsonPath("$[0].lat").value(37.5441))
+                .andExpect(jsonPath("$[0].lng").value(127.0078));
+
+        // "/{statId}" 상세 조회로 잘못 연결되지 않음
+        verify(stationService, never()).getStationDetail(any(), any());
+    }
+
+    @Test
+    void 시군_요약은_level_city로_조회한다() throws Exception {
+        // given
+        given(stationService.getRegionSummaries(RegionLevel.CITY)).willReturn(List.of(
+                new RegionSummaryResponse("4111", "수원시", 1939, 1600, 37.271, 127.028)));
+
+        // when
+        mockMvc.perform(get("/stations/regions").param("level", "city"))
+
+        // then
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].name").value("수원시"));
+
+        verify(stationService).getRegionSummaries(RegionLevel.CITY);
+    }
+
+    @Test
+    void 지역_요약의_level이_잘못되면_400을_반환한다() throws Exception {
+        // when
+        mockMvc.perform(get("/stations/regions").param("level", "gu"))
+
+        // then
+                .andExpect(status().isBadRequest());
+
+        verify(stationService, never()).getRegionSummaries(any());
     }
 
     // ========== GET /stations/bounds ==========

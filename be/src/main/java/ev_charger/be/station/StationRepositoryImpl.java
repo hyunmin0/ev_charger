@@ -3,9 +3,11 @@ package ev_charger.be.station;
 import ev_charger.be.station.congestion.CongestionLevelConverter;
 import ev_charger.be.station.dto.request.MapBoundsRequest;
 import ev_charger.be.station.dto.request.NearbyStationRequest;
+import ev_charger.be.station.dto.response.RegionSummaryResponse;
 import ev_charger.be.station.dto.response.StationResponse;
 import ev_charger.be.station.enums.FloorType;
 import ev_charger.be.station.enums.Kind;
+import ev_charger.be.station.enums.Sido;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import jakarta.persistence.Tuple;
@@ -26,6 +28,7 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
 
     // 네이티브 쿼리 결과의 혼잡도 문자열("여유" 등) -> CongestionLevel 변환용
     private static final CongestionLevelConverter CONGESTION_LEVEL_CONVERTER = new CongestionLevelConverter();
+
 
     /**
      * 내 위치 기준 반경 내 충전소 조회
@@ -110,7 +113,7 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
      * @return 충전소 목록
      */
     @Override
-    public List<StationResponse> findStationsInBoundsWithFilter(MapBoundsRequest request) {
+    public List<StationResponse> findStationsInBoundsWithFilter(MapBoundsRequest request, int maxCount) {
 
         StringBuilder sql = new StringBuilder("""
             select s."statId",
@@ -155,7 +158,21 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
         // 공통 필터 조건
         appendFilterWithGroupBy(sql, request.filter());
 
-        Query query = em.createNativeQuery(sql.toString(), Tuple.class);
+        // 화면 중심에서 가까운 maxCount곳만 고른 뒤 다시 유저와의 거리순으로 정렬
+        // (공통 조건 끝에 한 줄 주석이 붙어 있어서 줄을 바꾼 뒤 감쌈)
+        String limited = """
+            select * from (
+                select * from (
+            """ + sql + """
+
+                ) inner_t
+                order by power(inner_t.lat - :centerLat, 2) + power((inner_t.lng - :centerLng) * cos(radians(:centerLat)), 2)
+                limit :maxCount
+            ) limited_t
+            order by limited_t.distance
+            """;
+
+        Query query = em.createNativeQuery(limited, Tuple.class);
 
         // 이 메서드 고유 파라미터 바인딩
         query.setParameter("userLat", request.userLat());
@@ -164,11 +181,115 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
         query.setParameter("maxLat", request.maxLat());
         query.setParameter("minLng", request.minLng());
         query.setParameter("maxLng", request.maxLng());
+        query.setParameter("centerLat", (request.minLat() + request.maxLat()) / 2);
+        query.setParameter("centerLng", (request.minLng() + request.maxLng()) / 2);
+        query.setParameter("maxCount", maxCount);
 
         // 공통 필터 파라미터 바인딩
         bindFilterParams(query, request.filter());
 
         return toResponse(query.getResultList());
+    }
+
+    /**
+     * 시·도별 충전소 수와 표시 위치
+     * 위치는 평균 대신 중앙값: 좌표가 잘못 찍힌 충전소에 덜 흔들림
+     */
+    @Override
+    public List<RegionSummaryResponse> findRegionSummaries() {
+        String sql = """
+            select st.zcode,
+                count(*) "stationCount",
+                count(*) filter (where st.available) "availableStationCount",
+                percentile_cont(0.5) within group (order by st.lat) lat,
+                percentile_cont(0.5) within group (order by st.lng) lng
+            from (
+                select s.zcode,
+                    ST_Y(s.location::geometry) lat,
+                    ST_X(s.location::geometry) lng,
+                    bool_or(c.stat = '2') available -- 충전대기 충전기가 1대 이상
+                from station s
+                    join charger c on s."statId" = c."statId"
+                group by s."statId"
+            ) st
+            group by st.zcode
+            order by st.zcode
+            """;
+
+        List<Tuple> rows = em.createNativeQuery(sql, Tuple.class).getResultList();
+        return rows.stream()
+                .map(row -> new RegionSummaryResponse(
+                        row.get("zcode", String.class),
+                        Sido.nameOf(row.get("zcode", String.class)),
+                        row.get("stationCount", Number.class).longValue(),
+                        row.get("availableStationCount", Number.class).longValue(),
+                        row.get("lat", Number.class).doubleValue(),
+                        row.get("lng", Number.class).doubleValue()))
+                .toList();
+    }
+
+    /**
+     * 시·군별 충전소 수와 표시 위치 (도 안의 시·군을 나눠 보여줌)
+     * - 광역시·특별시는 구로 나누지 않고 하나로 묶음
+     * - 도는 zscode 앞 4자리(시·군)로 묶음. 구가 있는 시(수원시 장안구·권선구 ...)도 시 하나가 됨
+     * - 주소가 아니라 코드로 묶음: 주소는 표기가 섞이거나 비어 있는 충전소가 있어 엉뚱한 묶음이 생김
+     * - 이름은 묶음 안 주소 두 번째 단어 중 "~시/~군"인 것의 최빈값 (DB에 시·군 코드-이름 표가 없음)
+     */
+    @Override
+    public List<RegionSummaryResponse> findCitySummaries() {
+        String sql = """
+            select k.region_key "regionKey",
+                min(k.zcode) zcode,
+                mode() within group (order by k.tok) filter (where k.tok ~ '(시|군)$') "cityName",
+                count(*) "stationCount",
+                count(*) filter (where k.available) "availableStationCount",
+                percentile_cont(0.5) within group (order by k.lat) lat,
+                percentile_cont(0.5) within group (order by k.lng) lng
+            from (
+                select st.*,
+                    case when st.zcode in (:metroCodes) then st.zcode
+                         when st.zcode = :gwangjuZcode and left(st.zscode, 4) between :gwangjuFrom and :gwangjuTo then :gwangjuKey
+                         else left(st.zscode, 4) end region_key
+                from (
+                    select s.zcode, s.zscode,
+                        split_part(trim(s.addr), ' ', 2) tok,
+                        ST_Y(s.location::geometry) lat,
+                        ST_X(s.location::geometry) lng,
+                        bool_or(c.stat = '2') available -- 충전대기 충전기가 1대 이상
+                    from station s
+                        join charger c on s."statId" = c."statId"
+                    group by s."statId"
+                ) st
+            ) k
+            group by k.region_key
+            order by k.region_key
+            """;
+
+        Query query = em.createNativeQuery(sql, Tuple.class);
+        query.setParameter("metroCodes", Sido.METRO_CODES);
+        query.setParameter("gwangjuZcode", Sido.GWANGJU_ZCODE);
+        query.setParameter("gwangjuFrom", Sido.GWANGJU_ZSCODE_FROM);
+        query.setParameter("gwangjuTo", Sido.GWANGJU_ZSCODE_TO);
+        query.setParameter("gwangjuKey", Sido.GWANGJU_KEY);
+
+        List<Tuple> rows = query.getResultList();
+        return rows.stream()
+                .map(row -> {
+                    String key = row.get("regionKey", String.class);
+                    String zcode = row.get("zcode", String.class);
+                    String cityName = row.get("cityName", String.class);
+                    String name = Sido.GWANGJU_KEY.equals(key) ? Sido.GWANGJU_NAME
+                            : key.equals(zcode) || cityName == null ? Sido.nameOf(zcode)
+                            : cityName;
+                    return new RegionSummaryResponse(
+                            key,
+                            name,
+                            row.get("stationCount", Number.class).longValue(),
+                            row.get("availableStationCount", Number.class).longValue(),
+                            row.get("lat", Number.class).doubleValue(),
+                            row.get("lng", Number.class).doubleValue());
+                })
+                .toList();
     }
 
 

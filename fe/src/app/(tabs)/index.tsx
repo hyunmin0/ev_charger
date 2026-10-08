@@ -29,11 +29,16 @@ const FILTER_CHIPS = [
   { id: "open" }, { id: "speed" }, { id: "type" },
   { id: "facility" }, { id: "floor" },
 ];
-const RADIUS_STEPS = ["1km", "3km", "5km", "10km", "10km+"];
+// 마지막 "전체"는 반경 대신 지도 화면 기준으로 불러옴
+const RADIUS_STEPS = ["1km", "3km", "5km", "10km", "전체"];
+const ALL_RADIUS_IDX = RADIUS_STEPS.length - 1;
 const SPEED_STEPS = ["3kW", "7kW", "50kW", "100kW", "200kW", "400kW"];
 const CHARGER_TYPES = ["DC 차데모", "DC 콤보", "DC 콤보 (완속)", "DC 콤보2(버스전용)", "AC3 상", "AC 완속", "NACS"];
 const FACILITIES = ["공공시설", "주차시설", "휴게시설", "관광시설", "상업시설", "차량정비시설", "기타시설", "공동주택시설", "근린생활시설", "교육문화시설"];
 const FLOOR_TYPES = ["지상", "지하"];
+
+type Region = { code: string; name: string; stationCount: number; availableStationCount: number; lat: number; lng: number };
+type MapView = { level: number; minLat: number; maxLat: number; minLng: number; maxLng: number };
 
 type Station = {
   statId: string;
@@ -54,7 +59,11 @@ type Station = {
   allUnavailable: boolean;
 };
 
-const RADIUS_METERS = [1000, 3000, 5000, 10000, 20000];
+const RADIUS_METERS = [1000, 3000, 5000, 10000];
+// 카카오 지도 레벨(1 확대 ~ 14 전국)에 따라 요약 단위를 바꿈
+// SIDO_LEVEL 이상: 시·도 / CITY_LEVEL 이상: 도 안의 시·군(광역시는 하나) / 그 아래: 개별 충전소
+const SIDO_LEVEL = 11;
+const CITY_LEVEL = 8;
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
 function formatDistance(m: number) {
@@ -82,6 +91,10 @@ html,body,#map { width:100%; height:100%; }
 .loc-pulse { position:absolute; width:60px; height:60px; border-radius:50%; background:rgba(74,144,226,0.2); }
 .loc-dot { width:14px; height:14px; border-radius:50%; background:#4A90E2; border:2.5px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,0.25); position:relative; z-index:1; }
 .st-pin-wrap { cursor:pointer; display:block; }
+.rg { background:#fff; border:2px solid #5B9CF6; border-radius:14px; padding:5px 10px; text-align:center; box-shadow:0 1px 4px rgba(0,0,0,0.2); cursor:pointer; white-space:nowrap; font-family:sans-serif; }
+.rg b { display:block; font-size:13px; color:#222; }
+.rg span { font-size:11px; color:#555; }
+.rg i { font-style:normal; font-size:11px; color:#09AD12; margin-left:4px; }
 </style>
 </head><body><div id="map"></div>
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_API_KEY}&autoload=false"></script>
@@ -127,6 +140,36 @@ kakao.maps.load(function() {
       });
       window.myLocationDot.setMap(window.map);
     }
+  };
+  // 지도를 움직이거나 줌한 뒤 멈추면 화면 범위와 줌 레벨을 앱으로 보냄 ("전체" 모드에서 사용)
+  window.postView = function() {
+    var b = window.map.getBounds(), sw = b.getSouthWest(), ne = b.getNorthEast();
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      type: 'view', level: window.map.getLevel(),
+      minLat: sw.getLat(), maxLat: ne.getLat(), minLng: sw.getLng(), maxLng: ne.getLng()
+    }));
+  };
+  kakao.maps.event.addListener(window.map, 'idle', window.postView);
+  window.regionOverlays = [];
+  // zoomTo: 말풍선을 눌렀을 때 확대할 레벨
+  window.updateRegions = function(list, zoomTo) {
+    window.regionOverlays.forEach(function(o) { o.setMap(null); });
+    window.regionOverlays = [];
+    list.forEach(function(r) {
+      var ov = new kakao.maps.CustomOverlay({
+        position: new kakao.maps.LatLng(r.lat, r.lng),
+        content: '<div class="rg" onclick="window.zoomRegion(' + r.lat + ',' + r.lng + ',' + zoomTo + ')"><b>' + r.name + '</b>'
+          + '<span>' + r.stationCount.toLocaleString() + '곳</span><i>가능 ' + r.availableStationCount.toLocaleString() + '</i></div>',
+        xAnchor: 0.5, yAnchor: 0.5, zIndex: 6
+      });
+      ov.setMap(window.map);
+      window.regionOverlays.push(ov);
+    });
+  };
+  // 말풍선을 누르면 그 지역으로 한 단계 확대 (시·도 -> 시·군, 시·군 -> 개별 충전소)
+  window.zoomRegion = function(lat, lng, level) {
+    window.map.setLevel(level, { anchor: new kakao.maps.LatLng(lat, lng) });
+    window.map.setCenter(new kakao.maps.LatLng(lat, lng));
   };
   window.stationMarkers = [];
   window.updateStationMarkers = function(list) {
@@ -218,6 +261,12 @@ export default function HomeScreen() {
   const [freeParking, setFreeParking] = useState(false);
   const [openOnly, setOpenOnly] = useState(false);
   const [radiusIdx, setRadiusIdx] = useState(1);
+  const isAllMode = radiusIdx === ALL_RADIUS_IDX;
+  // "전체" 모드: 지도가 마지막으로 멈춘 화면 범위, 시·도 요약을 보여주는 중인지
+  const lastView = useRef<MapView | null>(null);
+  const [regionMode, setRegionMode] = useState(false);
+  const viewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const viewSeq = useRef(0);
 
   // background: 주기 새로고침. 실패해도 기존 목록을 그대로 둠
   const fetchStations = useCallback(async (cursor?: string | null, background = false) => {
@@ -251,6 +300,47 @@ export default function HomeScreen() {
       setStationsLoading(false);
     }
   }, [radiusIdx, available]);
+
+  const showRegions = useCallback((list: Region[], zoomTo = 0) => {
+    webviewRef.current?.injectJavaScript(`window.updateRegions && window.updateRegions(${JSON.stringify(list)}, ${zoomTo}); true;`);
+  }, []);
+
+  // "전체" 모드: 줌아웃 정도에 따라 시·도 / 시·군 요약, 확대하면 화면 범위 안 충전소 (be가 화면 중심에서 가까운 500곳까지)
+  const loadView = useCallback(async (view: MapView, background = false) => {
+    const seq = ++viewSeq.current; // 지도를 빨리 움직이면 늦게 온 이전 응답은 버림
+    setStationsLoading(true);
+    if (!background) setFetchError(false);
+    try {
+      if (view.level >= CITY_LEVEL) {
+        const isSido = view.level >= SIDO_LEVEL;
+        const res = await api.get<Region[]>("/stations/regions", { params: { level: isSido ? "sido" : "city" } });
+        if (seq !== viewSeq.current) return;
+        setRegionMode(true);
+        setStations([]);
+        showRegions(res.data ?? [], isSido ? SIDO_LEVEL - 2 : CITY_LEVEL - 2);
+      } else {
+        const res = await api.get<Station[]>("/stations/bounds", {
+          params: {
+            minLat: view.minLat, maxLat: view.maxLat, minLng: view.minLng, maxLng: view.maxLng,
+            userLat: userLat.current, userLng: userLng.current,
+            "filter.availableOnly": available,
+          },
+        });
+        if (seq !== viewSeq.current) return;
+        setRegionMode(false);
+        showRegions([]);
+        setStations(res.data ?? []);
+      }
+      setNextCursor(null);
+    } catch {
+      if (seq === viewSeq.current && !background) {
+        setFetchError(true);
+        setStations([]);
+      }
+    } finally {
+      if (seq === viewSeq.current) setStationsLoading(false);
+    }
+  }, [available, showRegions]);
 
   useEffect(() => {
     (async () => {
@@ -288,21 +378,37 @@ export default function HomeScreen() {
       isInitialMount.current = false;
       return;
     }
-    fetchStations();
+    if (isAllMode) {
+      // 지도에 현재 화면 범위를 다시 보내 달라고 함 -> onMessage의 view에서 불러옴
+      webviewRef.current?.injectJavaScript(`window.postView && window.postView(); true;`);
+    } else {
+      viewSeq.current++; // 진행 중인 "전체" 모드 응답 무시
+      setRegionMode(false);
+      showRegions([]);
+      fetchStations();
+    }
   }, [radiusIdx, available]);
 
   // 충전기 상태는 EC2가 5분마다 갱신함 -> 지도 탭을 보고 있는 동안 5분마다 다시 불러옴
-  const fetchStationsRef = useRef(fetchStations);
-  fetchStationsRef.current = fetchStations;
+  const isAllModeRef = useRef(isAllMode);
+  isAllModeRef.current = isAllMode;
+  const loadViewRef = useRef(loadView);
+  loadViewRef.current = loadView;
+  const refreshRef = useRef(() => {});
+  refreshRef.current = () => {
+    if (!isAllMode) fetchStations(null, true);
+    else if (lastView.current) loadView(lastView.current, true);
+  };
   useFocusEffect(
     useCallback(() => {
-      const timer = setInterval(() => fetchStationsRef.current(null, true), REFRESH_INTERVAL_MS);
+      const timer = setInterval(() => refreshRef.current(), REFRESH_INTERVAL_MS);
       return () => clearInterval(timer);
     }, [])
   );
 
   useEffect(() => {
-    if (!mapReady || stations.length === 0) return;
+    // 빈 목록도 보내야 이전 마커가 지워짐 (모드 전환, 시·도 요약)
+    if (!mapReady) return;
     const payload = stations.map(s => ({
       statId: s.statId,
       lat: s.lat,
@@ -367,7 +473,7 @@ export default function HomeScreen() {
 
   const chipLabel = (id: string) => {
     const open = popupChip === id;
-    if (id === "radius") return `반경 ${RADIUS_STEPS[radiusIdx]}`;
+    if (id === "radius") return isAllMode ? "전체 지역" : `반경 ${RADIUS_STEPS[radiusIdx]}`;
     if (id === "speed") return `${SPEED_STEPS[speedMin]}~${SPEED_STEPS[speedMax]}`;
     if (id === "available") return "충전 가능";
     if (id === "parking") return "무료 주차장";
@@ -464,6 +570,12 @@ export default function HomeScreen() {
                 router.push(`/station/${data.id}` as any);
               } else if (data.type === "center") {
                 AsyncStorage.setItem("mapLocation", JSON.stringify({ lat: data.lat, lng: data.lng }));
+              } else if (data.type === "view") {
+                lastView.current = data;
+                if (!isAllModeRef.current) return;
+                // 지도를 연달아 움직이면 마지막으로 멈춘 화면만 불러옴
+                if (viewTimer.current) clearTimeout(viewTimer.current);
+                viewTimer.current = setTimeout(() => loadViewRef.current(data), 500);
               }
             } catch {}
           }}
@@ -507,7 +619,7 @@ export default function HomeScreen() {
               <>
                 <View style={S.secRow}>
                   <Text style={S.secTitle}>내 위치에서 반경</Text>
-                  <Text style={S.secVal}>~{RADIUS_STEPS[radiusIdx]}</Text>
+                  <Text style={S.secVal}>{isAllMode ? "지도 화면 전체" : `~${RADIUS_STEPS[radiusIdx]}`}</Text>
                 </View>
                 <StepSlider steps={RADIUS_STEPS} value={radiusIdx} onChange={setRadiusIdx} />
               </>
@@ -553,7 +665,7 @@ export default function HomeScreen() {
             !stationsLoading ? (
               <View style={{ alignItems: "center", paddingTop: 40, gap: 8 }}>
                 <Text style={{ color: "#aaa", fontSize: 14 }}>
-                  {fetchError ? "불러오지 못했어요" : "주변 충전소가 없어요"}
+                  {fetchError ? "불러오지 못했어요" : regionMode ? "지도를 확대하면 충전소 목록이 보여요" : "주변 충전소가 없어요"}
                 </Text>
               </View>
             ) : null
@@ -570,7 +682,7 @@ export default function HomeScreen() {
             <View style={S.sec}>
               <View style={S.secRow}>
                 <Text style={S.secTitle}>내 위치에서 반경</Text>
-                <Text style={S.secVal}>~{RADIUS_STEPS[radiusIdx]}</Text>
+                <Text style={S.secVal}>{isAllMode ? "지도 화면 전체" : `~${RADIUS_STEPS[radiusIdx]}`}</Text>
               </View>
               <StepSlider steps={RADIUS_STEPS} value={radiusIdx} onChange={setRadiusIdx} />
             </View>

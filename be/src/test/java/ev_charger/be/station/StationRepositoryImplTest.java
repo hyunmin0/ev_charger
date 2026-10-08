@@ -12,6 +12,7 @@ import ev_charger.be.station.congestion.Congestion;
 import ev_charger.be.station.congestion.CongestionLevel;
 import ev_charger.be.station.dto.request.MapBoundsRequest;
 import ev_charger.be.station.dto.request.NearbyStationRequest;
+import ev_charger.be.station.dto.response.RegionSummaryResponse;
 import ev_charger.be.station.dto.response.StationResponse;
 import ev_charger.be.station.enums.FloorType;
 import ev_charger.be.station.enums.Kind;
@@ -80,6 +81,8 @@ class StationRepositoryImplTest {
     private static final double USER_LNG = 126.9780;
     // 조회 반경(m)
     private static final int RANGE = 3000;
+    // 지도 영역 조회 상한 (상한에 걸리지 않는 값)
+    private static final int MAX_COUNT = 500;
 
     // 충전소 운영기관
     private static final String BUSI_ID = "ME";
@@ -712,7 +715,7 @@ class StationRepositoryImplTest {
                 StationFilter.empty());
 
         // when
-        List<StationResponse> responses = stationRepository.findStationsInBoundsWithFilter(request);
+        List<StationResponse> responses = stationRepository.findStationsInBoundsWithFilter(request, MAX_COUNT);
 
         // then
         assertThat(responses)
@@ -731,7 +734,7 @@ class StationRepositoryImplTest {
                 StationFilter.empty());
 
         // when
-        List<StationResponse> responses = stationRepository.findStationsInBoundsWithFilter(request);
+        List<StationResponse> responses = stationRepository.findStationsInBoundsWithFilter(request, MAX_COUNT);
 
         // then
         assertThat(responses)
@@ -752,12 +755,121 @@ class StationRepositoryImplTest {
                 filter);
 
         // when
-        List<StationResponse> responses = stationRepository.findStationsInBoundsWithFilter(request);
+        List<StationResponse> responses = stationRepository.findStationsInBoundsWithFilter(request, MAX_COUNT);
 
         // then
         assertThat(responses)
                 .extracting(StationResponse::statId)
                 .containsExactly(DEOKSUGUNG_STAT_ID, CITY_HALL_EXIT_STAT_ID); // 영역 안 3개 중 지하(B)만, 서울시청(지상) 제외
+    }
+
+    @Test
+    void 지도_영역_조회는_화면_중심에서_가까운_곳만_상한까지_남기고_유저_거리순으로_정렬한다() {
+        // 화면 중심이 광화문 근처 (위도 37.5750, 경도 126.9775)
+        // 유저(서울시청)와 가장 가까운 곳이 아니라 화면 중심과 가장 가까운 광화문이 남아야 함
+        MapBoundsRequest request = new MapBoundsRequest(
+                37.5650, 37.5850,
+                126.9700, 126.9850,
+                USER_LAT, USER_LNG,
+                StationFilter.empty());
+
+        // when: 상한 1곳
+        List<StationResponse> responses = stationRepository.findStationsInBoundsWithFilter(request, 1);
+
+        // then
+        assertThat(responses)
+                .extracting(StationResponse::statId)
+                .containsExactly(GWANGHWAMUN_STAT_ID);
+    }
+
+    @Test
+    void 지도_영역_조회는_상한_안에서_유저_거리순으로_정렬한다() {
+        // 영역 안 4곳(서울시청, 덕수궁, 시청역, 광화문) 중 화면 중심(위도 37.5710, 경도 126.9795)에서 가장 먼 덕수궁이 빠짐
+        MapBoundsRequest request = new MapBoundsRequest(
+                37.5650, 37.5770,
+                126.9740, 126.9850,
+                USER_LAT, USER_LNG,
+                StationFilter.empty());
+
+        // when
+        List<StationResponse> limited = stationRepository.findStationsInBoundsWithFilter(request, 3);
+        List<StationResponse> all = stationRepository.findStationsInBoundsWithFilter(request, MAX_COUNT);
+
+        // then: 남은 3곳은 유저(서울시청) 거리순
+        assertThat(all).hasSize(4);
+        assertThat(limited)
+                .extracting(StationResponse::statId)
+                .containsExactly(CITY_HALL_STAT_ID, CITY_HALL_EXIT_STAT_ID, GWANGHWAMUN_STAT_ID);
+    }
+
+    // ========== findRegionSummaries ==========
+
+    @Test
+    void 시도별_충전소_수와_이용_가능_충전소_수를_집계한다() {
+        // 샘플 충전소 6곳 모두 서울(11)
+        // 충전대기 충전기가 있는 곳: 서울시청, 덕수궁, 강남역 -> 3곳
+        // 충전기가 여러 대여도 충전소는 한 번만 셈
+
+        // when
+        List<RegionSummaryResponse> regions = stationRepository.findRegionSummaries();
+
+        // then
+        assertThat(regions).hasSize(1);
+        RegionSummaryResponse seoul = regions.get(0);
+        assertThat(seoul.code()).isEqualTo(ZCODE);
+        assertThat(seoul.name()).isEqualTo("서울");
+        assertThat(seoul.stationCount()).isEqualTo(6);
+        assertThat(seoul.availableStationCount()).isEqualTo(3);
+        // 표시 위치는 샘플 충전소들 사이 (중앙값)
+        assertThat(seoul.lat()).isBetween(37.49, 37.58);
+        assertThat(seoul.lng()).isBetween(126.97, 127.03);
+    }
+
+    // ========== findCitySummaries ==========
+
+    @Test
+    void 시군_요약은_도_안의_시를_나누고_광역시와_시의_구는_나누지_않는다() {
+        // given: 서울 샘플 6곳 + 경기 수원시 2개 구 + 전남광주의 광주 북구, 순천시
+        // 주소 표기가 섞여 있어도("경기도"/"경기") 코드로 묶임
+        persistStationWithCharger("TS100001", "경기도 수원시 장안구 정자로 1", "41", "41111", 37.30, 127.01, ChgerStat.WAITING);
+        persistStationWithCharger("TS100002", "경기 수원시 권선구 권선로 1", "41", "41113", 37.26, 127.03, ChgerStat.CHARGING);
+        persistStationWithCharger("TS100003", "전남광주통합특별시 북구 용봉로 1", "12", "12300", 35.17, 126.91, ChgerStat.WAITING);
+        persistStationWithCharger("TS100004", "전남광주통합특별시 순천시 중앙로 1", "12", "12150", 34.95, 127.49, ChgerStat.WAITING);
+        em.flush();
+
+        // when
+        List<RegionSummaryResponse> regions = stationRepository.findCitySummaries();
+
+        // then
+        assertThat(regions)
+                .extracting(RegionSummaryResponse::code, RegionSummaryResponse::name,
+                        RegionSummaryResponse::stationCount, RegionSummaryResponse::availableStationCount)
+                .containsExactlyInAnyOrder(
+                        tuple(ZCODE, "서울", 6L, 3L), // 광역시는 구로 나누지 않음
+                        tuple("4111", "수원시", 2L, 1L), // 장안구·권선구가 수원시 하나로
+                        tuple("12-gwangju", "광주", 1L, 1L), // 전남광주 안의 광주 구는 "광주"
+                        tuple("1215", "순천시", 1L, 1L));
+    }
+
+    private void persistStationWithCharger(String statId, String addr, String zcode, String zscode,
+                                           double lat, double lng, ChgerStat stat) {
+        Station station = em.persist(Station.builder()
+                .statId(statId)
+                .statNm(statId)
+                .addr(addr)
+                .location(GEOMETRY_FACTORY.createPoint(new Coordinate(lng, lat)))
+                .useTime(USE_TIME)
+                .stationOperator(operator)
+                .zcode(zcode)
+                .zscode(zscode)
+                .kind(Kind.PUBLIC)
+                .parkingFree(YN.Y)
+                .limitYn(YN.N)
+                .floorType(FloorType.F)
+                .build());
+        em.persist(Charger.builder().station(station).chgerId(CHGER_ID)
+                .chgerType(ChgerType.DC_COMBO).chgerStat(stat)
+                .statUpdDt(STAT_UPD_DT).output(FAST_OUTPUT).build());
     }
 
     @Test
@@ -772,7 +884,7 @@ class StationRepositoryImplTest {
                 StationFilter.empty());
 
         // when
-        List<StationResponse> responses = stationRepository.findStationsInBoundsWithFilter(request);
+        List<StationResponse> responses = stationRepository.findStationsInBoundsWithFilter(request, MAX_COUNT);
 
         // then
         assertThat(responses)

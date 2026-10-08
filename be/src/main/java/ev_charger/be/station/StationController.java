@@ -4,8 +4,10 @@ import ev_charger.be.security.CustomUserDetails;
 import ev_charger.be.station.dto.request.MapBoundsRequest;
 import ev_charger.be.station.dto.request.NearbyStationRequest;
 import ev_charger.be.station.dto.response.NearbyStationPageResponse;
+import ev_charger.be.station.dto.response.RegionSummaryResponse;
 import ev_charger.be.station.dto.response.StationDetailResponse;
 import ev_charger.be.station.dto.response.StationResponse;
+import ev_charger.be.station.enums.RegionLevel;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -36,6 +38,15 @@ public class StationController {
     public ResponseEntity<List<StationResponse>> getStationsInBounds(
             @ModelAttribute MapBoundsRequest request) { // URL 파라미터를 DTO로 한번에 받음
         return ResponseEntity.ok(stationService.getStationsInBounds(request));
+    }
+
+    // 지역별 충전소 요약 (지도를 줌아웃했을 때)
+    // input : level = sido(시·도, 기본값) | city(도 안의 시·군 + 광역시)
+    // output: List<RegionSummaryResponse> { code, name, stationCount, availableStationCount, lat, lng }
+    @GetMapping("/regions")
+    public ResponseEntity<List<RegionSummaryResponse>> getRegionSummaries(
+            @RequestParam(defaultValue = "sido") String level) {
+        return ResponseEntity.ok(stationService.getRegionSummaries(RegionLevel.from(level)));
     }
 
     /**
