@@ -68,7 +68,9 @@ export default function RegisterScreen() {
           ["refresh_token", data.refreshToken ?? ""],
         ]);
         registerPushToken({ ask: true });
-        router.replace("/(tabs)/mypage" as any);
+        // login 화면을 replace로 대체했으므로 back 하면 로그인 전 화면으로 돌아감
+        if (router.canGoBack()) router.back();
+        else router.replace("/(tabs)/mypage" as any);
       } else {
         Alert.alert("가입 실패", "잠시 후 다시 시도해주세요.");
       }

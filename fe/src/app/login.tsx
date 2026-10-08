@@ -86,7 +86,9 @@ export default function LoginScreen() {
         ["refresh_token", data.refreshToken ?? ""],
       ]);
       registerPushToken({ ask: true });
-      router.replace("/(tabs)/mypage" as any);
+      // 로그인 팝업으로 들어온 경우 원래 보던 화면으로 돌아감
+      if (router.canGoBack()) router.back();
+      else router.replace("/(tabs)/mypage" as any);
     } else if (data.status === "NEED_PROFILE_SELECT") {
       router.replace({ pathname: "/register", params: { tempToken: data.tempToken } } as any);
     }

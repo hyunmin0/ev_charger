@@ -7,14 +7,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "@/lib/api";
+import { requireLogin } from "@/lib/auth";
 import { unregisterPushToken } from "@/lib/push";
 
+// needLogin: 비로그인 상태에서 누르면 로그인 유도 팝업
 const MENU_ITEMS = [
-  { label: "내 차량 관리", icon: "car-outline" as const, route: "/car-management" },
-  { label: "즐겨찾기 충전소", icon: "star-outline" as const, route: "/favorites" },
-  { label: "충전기 알림 관리", icon: "notifications-outline" as const, route: "/charger-alerts" },
-  { label: "내 리뷰", icon: "chatbubble-outline" as const, route: "/my-reviews" },
-  { label: "공지사항", icon: "megaphone-outline" as const, route: "/notices" },
+  { label: "내 차량 관리", icon: "car-outline" as const, route: "/car-management", needLogin: true },
+  { label: "즐겨찾기 충전소", icon: "star-outline" as const, route: "/favorites", needLogin: true },
+  { label: "충전기 알림 관리", icon: "notifications-outline" as const, route: "/charger-alerts", needLogin: true },
+  { label: "내 리뷰", icon: "chatbubble-outline" as const, route: "/my-reviews", needLogin: true },
+  { label: "공지사항", icon: "megaphone-outline" as const, route: "/notices", needLogin: false },
 ];
 
 type Profile = {
@@ -85,7 +87,9 @@ export default function MypageScreen() {
       <View style={S.header}>
         <Text style={S.headerTitle}>마이페이지</Text>
         <View style={S.headerIcons}>
-          <TouchableOpacity style={S.iconBtn} onPress={() => router.push("/charger-alert-history" as any)}>
+          <TouchableOpacity style={S.iconBtn} onPress={async () => {
+            if (await requireLogin()) router.push("/charger-alert-history" as any);
+          }}>
             <Ionicons name="notifications-outline" size={24} color="#333" />
           </TouchableOpacity>
           <TouchableOpacity style={S.iconBtn} onPress={() => router.push("/settings" as any)}>
@@ -138,7 +142,10 @@ export default function MypageScreen() {
             <TouchableOpacity
               key={item.label}
               style={[S.menuItem, index < MENU_ITEMS.length - 1 && S.menuBorder]}
-              onPress={() => router.push(item.route as any)}
+              onPress={async () => {
+                if (item.needLogin && !(await requireLogin())) return;
+                router.push(item.route as any);
+              }}
             >
               <View style={S.menuLeft}>
                 <Ionicons name={item.icon} size={20} color="#555" style={S.menuIcon} />

@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions,
   ActivityIndicator, Alert, Modal, TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import api from "@/lib/api";
+import { requireLogin } from "@/lib/auth";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -119,23 +120,27 @@ export default function StationDetailScreen() {
   const [reviewContent, setReviewContent] = useState("");
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
 
-  useEffect(() => {
-    if (!id) return;
-    (async () => {
-      try {
-        const res = await api.get<StationDetail>(`/stations/${id}`);
-        setStation(res.data);
-        setBookmarked(res.data.isFavorite ?? false);
-      } catch {
-        Alert.alert("오류", "충전소 정보를 불러오지 못했습니다.");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [id]);
+  // 로그인 팝업 → 로그인 후 돌아왔을 때 즐겨찾기/알림 상태가 반영되도록 들어올 때마다 다시 불러옴
+  useFocusEffect(
+    useCallback(() => {
+      if (!id) return;
+      (async () => {
+        try {
+          const res = await api.get<StationDetail>(`/stations/${id}`);
+          setStation(res.data);
+          setBookmarked(res.data.isFavorite ?? false);
+        } catch {
+          Alert.alert("오류", "충전소 정보를 불러오지 못했습니다.");
+        } finally {
+          setLoading(false);
+        }
+      })();
+    }, [id])
+  );
 
   const toggleBookmark = useCallback(async () => {
     if (!station || bookmarkLoading) return;
+    if (!(await requireLogin())) return;
     setBookmarkLoading(true);
     try {
       if (bookmarked) {
@@ -154,6 +159,7 @@ export default function StationDetailScreen() {
 
   const toggleAlert = useCallback(async (chger: ChgerDetail) => {
     if (!station || alertLoading.has(chger.chgerId)) return;
+    if (!(await requireLogin())) return;
     setAlertLoading(prev => new Set([...prev, chger.chgerId]));
     try {
       if (chger.isAlert) {
@@ -385,7 +391,9 @@ export default function StationDetailScreen() {
             </View>
             <TouchableOpacity
               style={styles.writeBtn}
-              onPress={() => setReviewModalVisible(true)}
+              onPress={async () => {
+                if (await requireLogin()) setReviewModalVisible(true);
+              }}
             >
               <Text style={styles.writeBtnText}>리뷰 작성</Text>
             </TouchableOpacity>

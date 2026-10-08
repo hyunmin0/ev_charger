@@ -14,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "@/lib/api";
+import { requireLogin } from "@/lib/auth";
 
 const ACCENT = "#5B9CF6";
 
@@ -61,6 +62,7 @@ export default function ChatScreen() {
   const send = async () => {
     const text = input.trim();
     if (!text || loading) return;
+    if (!(await requireLogin())) return;
 
     const stored = await AsyncStorage.getItem("mapLocation");
     const location = stored ? JSON.parse(stored) : null;
