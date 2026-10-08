@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect, useCallback } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Animated, Dimensions, Modal, Switch,
-  PanResponder, FlatList, ActivityIndicator,
+  PanResponder, FlatList, ActivityIndicator, Alert, Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
@@ -66,6 +66,22 @@ const SIDO_LEVEL = 11;
 const CITY_LEVEL = 8;
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
+// 내 위치 버튼: 이 시간 안에 잡힌 위치면 바로 사용, 정확한 위치가 이만큼 다르면 다시 옮김
+const LAST_LOCATION_MAX_AGE_MS = 5 * 60 * 1000;
+const RELOCATE_MIN_METERS = 50;
+// 이동 중 위치 추적 간격 (이만큼 움직이거나 시간이 지나면 파란 점 갱신)
+const WATCH_DISTANCE_METERS = 10;
+const WATCH_INTERVAL_MS = 5000;
+
+function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const r = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * r * Math.asin(Math.sqrt(a));
+}
+
 function formatDistance(m: number) {
   return m >= 1000 ? `${(m / 1000).toFixed(1)}km` : `${Math.round(m)}m`;
 }
@@ -127,9 +143,20 @@ kakao.maps.load(function() {
     var c = window.map.getCenter();
     window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'center', lat: c.getLat(), lng: c.getLng() }));
   });
-  window.moveToMyLocation = function(lat, lng) {
+  // zoomIn: 내 위치 버튼 -> 많이 줌아웃해 있으면 동네가 보이는 정도로 확대
+  window.moveToMyLocation = function(lat, lng, zoomIn) {
     var pos = new kakao.maps.LatLng(lat, lng);
-    window.map.panTo(pos);
+    if (zoomIn && window.map.getLevel() > 5) {
+      window.map.setLevel(5);
+      window.map.setCenter(pos);
+    } else {
+      window.map.panTo(pos);
+    }
+    window.setMyLocationDot(lat, lng);
+  };
+  // 파란 점만 옮김 (이동 중 위치 추적: 지도 화면은 따라가지 않음)
+  window.setMyLocationDot = function(lat, lng) {
+    var pos = new kakao.maps.LatLng(lat, lng);
     if (window.myLocationDot) {
       window.myLocationDot.setPosition(pos);
     } else {
@@ -250,8 +277,8 @@ export default function HomeScreen() {
   const pendingLocation = useRef<{ lat: number; lng: number } | null>(null);
   const isInitialMount = useRef(true);
 
-  const moveToUserLocation = useCallback((lat: number, lng: number) => {
-    webviewRef.current?.injectJavaScript(`window.moveToMyLocation(${lat}, ${lng}); true;`);
+  const moveToUserLocation = useCallback((lat: number, lng: number, zoomIn = false) => {
+    webviewRef.current?.injectJavaScript(`window.moveToMyLocation(${lat}, ${lng}, ${zoomIn}); true;`);
   }, []);
 
   const [sheetVisible, setSheetVisible] = useState(false);
@@ -394,6 +421,78 @@ export default function HomeScreen() {
   isAllModeRef.current = isAllMode;
   const loadViewRef = useRef(loadView);
   loadViewRef.current = loadView;
+  // 내 위치 버튼: 현재 GPS로 지도를 옮기고 내 위치 기준으로 다시 불러옴
+  const [locating, setLocating] = useState(false);
+  const goToMyLocation = async () => {
+    setLocating(true);
+    try {
+      let perm = await Location.getForegroundPermissionsAsync();
+      if (!perm.granted && perm.canAskAgain) perm = await Location.requestForegroundPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("위치 권한이 필요해요", "휴대폰 설정에서 이 앱의 위치 권한을 허용해 주세요.", [
+          { text: "취소", style: "cancel" },
+          { text: "설정 열기", onPress: () => Linking.openSettings() },
+        ]);
+        return;
+      }
+      // 새 GPS 위치를 잡는 데 몇 초 걸려서, 기기가 이미 알고 있는 최근 위치로 먼저 바로 옮김
+      const last = await Location.getLastKnownPositionAsync({ maxAge: LAST_LOCATION_MAX_AGE_MS });
+      if (last) applyMyLocation(last.coords.latitude, last.coords.longitude);
+      else moveToUserLocation(userLat.current, userLng.current, true);
+      setLocating(false);
+
+      // 정확한 현재 위치는 뒤에서 받아서, 많이 달라졌을 때만 다시 옮김
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const { latitude, longitude } = loc.coords;
+      if (!last || distanceMeters(last.coords.latitude, last.coords.longitude, latitude, longitude) > RELOCATE_MIN_METERS) {
+        applyMyLocation(latitude, longitude);
+      }
+    } catch {
+      Alert.alert("오류", "현재 위치를 가져오지 못했어요.");
+    } finally {
+      setLocating(false);
+    }
+  };
+
+  const applyMyLocation = (lat: number, lng: number) => {
+    userLat.current = lat;
+    userLng.current = lng;
+    moveToUserLocation(lat, lng, true);
+    // "전체" 모드는 지도가 멈추면(idle) 그 화면으로 다시 불러옴
+    if (!isAllMode) fetchStations();
+  };
+
+  // 지도 탭을 보고 있는 동안 위치를 추적해서 파란 점을 옮김 (충전소는 5분 새로고침·필터 변경 때 이 위치로 불러옴)
+  useFocusEffect(
+    useCallback(() => {
+      let sub: Location.LocationSubscription | null = null;
+      let cancelled = false;
+      (async () => {
+        // 권한은 묻지 않음: 처음 화면과 내 위치 버튼에서 이미 물어봄
+        const perm = await Location.getForegroundPermissionsAsync();
+        if (!perm.granted || cancelled) return;
+        const s = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.Balanced, distanceInterval: WATCH_DISTANCE_METERS, timeInterval: WATCH_INTERVAL_MS },
+          (loc) => {
+            userLat.current = loc.coords.latitude;
+            userLng.current = loc.coords.longitude;
+            if (mapLoaded.current) {
+              webviewRef.current?.injectJavaScript(
+                `window.setMyLocationDot && window.setMyLocationDot(${loc.coords.latitude}, ${loc.coords.longitude}); true;`
+              );
+            }
+          }
+        );
+        if (cancelled) s.remove();
+        else sub = s;
+      })().catch(() => {});
+      return () => {
+        cancelled = true;
+        sub?.remove();
+      };
+    }, [])
+  );
+
   const refreshRef = useRef(() => {});
   refreshRef.current = () => {
     if (!isAllMode) fetchStations(null, true);
@@ -589,6 +688,11 @@ export default function HomeScreen() {
             <Ionicons name="search-outline" size={20} color="#999" />
           </View>
         </View>
+        <TouchableOpacity style={S.myLocBtn} onPress={goToMyLocation} disabled={locating}>
+          {locating
+            ? <ActivityIndicator size="small" color={ACCENT} />
+            : <Ionicons name="locate" size={22} color="#333" />}
+        </TouchableOpacity>
       </SafeAreaView>
 
       <Animated.View style={[S.listSheet, { transform: [{ translateY: listSheetY }] }]}>
@@ -751,6 +855,11 @@ const S = StyleSheet.create({
   searchRow: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 4 },
   searchBar: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderRadius: 12, paddingHorizontal: 14, height: 44, shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 6, elevation: 4 },
   searchInput: { flex: 1, fontSize: 15, color: "#222" },
+  myLocBtn: {
+    alignSelf: "flex-end", marginRight: 16, marginTop: 8, width: 44, height: 44, borderRadius: 22,
+    backgroundColor: "#fff", alignItems: "center", justifyContent: "center",
+    shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 6, elevation: 4,
+  },
   listSheet: {
     position: "absolute", bottom: 0, left: 0, right: 0, height: LIST_MAX,
     backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20,
