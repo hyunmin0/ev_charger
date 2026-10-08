@@ -20,6 +20,17 @@ public class UserService {
     private final ReviewRepository reviewRepository;
     private final ChargerAlertRepository chargerAlertRepository;
 
+    // 회원가입·프로필 수정 화면의 입력 제한과 같음
+    static final int MAX_NICKNAME_LENGTH = 20;
+
+    /**
+     * 인증 필터에서 조회된 user는 detached라 값을 바꿔도 DB에 반영되지 않음 -> 현재 트랜잭션에서 다시 조회
+     */
+    private User findAttachedUser(User user) {
+        return userRepository.findById(user.getUserId())
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 유저"));
+    }
+
     /**
      * 닉네임 수정
      * @param user
@@ -27,7 +38,15 @@ public class UserService {
      */
     @Transactional
     public void updateNickname(User user, String newName) {
-        user.updateNickname(newName);
+        String trimmed = newName == null ? "" : newName.trim();
+        if (trimmed.isEmpty()) {
+            throw new IllegalArgumentException("닉네임을 입력해주세요.");
+        }
+        if (trimmed.length() > MAX_NICKNAME_LENGTH) {
+            throw new IllegalArgumentException("닉네임은 " + MAX_NICKNAME_LENGTH + "자 이하로 입력해주세요.");
+        }
+
+        findAttachedUser(user).updateNickname(trimmed);
     }
 
     /**
@@ -43,7 +62,7 @@ public class UserService {
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 프로필 이미지"));
 
         // users.profileImage 업데이트
-        user.updateProfileImage(profileImage);
+        findAttachedUser(user).updateProfileImage(profileImage);
 
         // url 반환
         return profileImage.getImageUrl();
@@ -58,8 +77,7 @@ public class UserService {
     public UserResponse getProfile(User user) {
         // 인증 필터에서 조회된 user는 이미 세션이 닫힌 detached 상태라
         // LAZY 연관관계(profileImage)에 접근하려면 현재 트랜잭션 안에서 다시 조회해야 함
-        User attachedUser = userRepository.findById(user.getUserId())
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 유저"));
+        User attachedUser = findAttachedUser(user);
 
         return new UserResponse(
                 attachedUser.getNickname(),

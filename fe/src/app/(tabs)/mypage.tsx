@@ -104,7 +104,7 @@ export default function MypageScreen() {
               <Text style={S.profileName}>{profile.nickname || "사용자"}</Text>
               <Text style={S.profileEmail}>{profile.email || ""}</Text>
             </View>
-            <TouchableOpacity onPress={() => router.push("/login" as any)}>
+            <TouchableOpacity onPress={() => router.push("/profile-edit" as any)}>
               <Ionicons name="create-outline" size={20} color="#aaa" />
             </TouchableOpacity>
           </View>

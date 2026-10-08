@@ -17,6 +17,7 @@ export default function RootLayout() {
         <Stack.Screen name="charger-alerts" />
         <Stack.Screen name="my-reviews" />
         <Stack.Screen name="notices" />
+        <Stack.Screen name="profile-edit" />
       </Stack>
     </>
   );

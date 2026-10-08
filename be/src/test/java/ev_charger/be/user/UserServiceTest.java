@@ -65,14 +65,31 @@ class UserServiceTest {
 
     @Test
     void 닉네임_수정_성공() {
-        // given
-        String newName = "새이름";
+        // given: 인증 필터가 준 user가 아니라 트랜잭션에서 다시 조회한 user를 수정해야 DB에 반영됨
+        User attachedUser = User.builder().nickname("테스터").build();
+        given(userRepository.findById(user.getUserId())).willReturn(Optional.of(attachedUser));
 
         // when
-        userService.updateNickname(user, newName);
+        userService.updateNickname(user, "  새이름  ");
 
         // then
-        assertThat(user.getNickname()).isEqualTo(newName);
+        assertThat(attachedUser.getNickname()).isEqualTo("새이름");
+    }
+
+    @Test
+    void 빈_닉네임이면_수정시_예외_발생() {
+        assertThatThrownBy(() -> userService.updateNickname(user, "   "))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("닉네임을 입력해주세요.");
+    }
+
+    @Test
+    void 닉네임이_길면_수정시_예외_발생() {
+        String tooLong = "가".repeat(UserService.MAX_NICKNAME_LENGTH + 1);
+
+        assertThatThrownBy(() -> userService.updateNickname(user, tooLong))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("닉네임은 " + UserService.MAX_NICKNAME_LENGTH + "자 이하로 입력해주세요.");
     }
 
     @Test
@@ -83,13 +100,16 @@ class UserServiceTest {
                 .imageUrl("https://image.url/2")
                 .name("profile-2")
                 .build();
+        User attachedUser = User.builder().nickname("테스터").build();
         given(profileImageRepository.findById(newProfileImageId)).willReturn(Optional.of(profileImage));
+        given(userRepository.findById(user.getUserId())).willReturn(Optional.of(attachedUser));
 
         // when
         String url = userService.updateProfileImage(user, newProfileImageId);
 
         // then
         assertThat(url).isEqualTo("https://image.url/2");
+        assertThat(attachedUser.getProfileImage()).isEqualTo(profileImage);
     }
 
     @Test
