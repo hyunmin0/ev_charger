@@ -11,11 +11,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Optional;
+import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -48,7 +50,7 @@ class FcmTokenServiceTest {
     void FCM_토큰_등록_성공() {
         // given
         String token = "token-1";
-        given(fcmTokenRepository.existsByUserAndToken(user, token)).willReturn(false);
+        given(fcmTokenRepository.findByToken(token)).willReturn(Optional.empty());
 
         // when
         fcmTokenService.register(user, token);
@@ -63,44 +65,54 @@ class FcmTokenServiceTest {
     }
 
     @Test
-    void 중복된_토큰이면_등록시_예외_발생() {
-        // given
+    void 이미_등록된_토큰이면_그대로_둔다() {
+        // given: 앱이 실행할 때마다 같은 토큰을 다시 보냄
         String token = "token-1";
-        given(fcmTokenRepository.existsByUserAndToken(user, token)).willReturn(true);
+        User me = userWithId(UUID.randomUUID());
+        FcmToken existing = new FcmToken(me, token);
+        given(fcmTokenRepository.findByToken(token)).willReturn(Optional.of(existing));
 
-        // when & then
-        assertThatThrownBy(() -> fcmTokenService.register(user, token))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("중복된 Fcm 토큰 값입니다.");
+        // when
+        fcmTokenService.register(me, token);
 
+        // then
         verify(fcmTokenRepository, never()).save(any());
+        assertThat(existing.getUser()).isEqualTo(me);
+    }
+
+    @Test
+    void 다른_계정의_토큰이면_주인을_바꾼다() {
+        // given: 같은 기기에서 로그아웃 없이 다른 계정으로 로그인
+        String token = "token-1";
+        User before = userWithId(UUID.randomUUID());
+        User after = userWithId(UUID.randomUUID());
+        FcmToken existing = new FcmToken(before, token);
+        given(fcmTokenRepository.findByToken(token)).willReturn(Optional.of(existing));
+
+        // when
+        fcmTokenService.register(after, token);
+
+        // then
+        verify(fcmTokenRepository, never()).save(any());
+        assertThat(existing.getUser()).isEqualTo(after);
     }
 
     @Test
     void FCM_토큰_삭제_성공() {
         // given
         String token = "token-1";
-        given(fcmTokenRepository.existsByUserAndToken(user, token)).willReturn(true);
 
         // when
         fcmTokenService.delete(user, token);
 
-        // then
+        // then: 없는 토큰이어도 예외 없이 삭제 쿼리만 실행
         verify(fcmTokenRepository).deleteByUserAndToken(user, token);
     }
 
-    @Test
-    void 존재하지_않는_토큰이면_삭제시_예외_발생() {
-        // given
-        String token = "token-1";
-        given(fcmTokenRepository.existsByUserAndToken(user, token)).willReturn(false);
-
-        // when & then
-        assertThatThrownBy(() -> fcmTokenService.delete(user, token))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Fcm 토큰이 존재하지 않습니다.");
-
-        verify(fcmTokenRepository, never()).deleteByUserAndToken(any(), anyString());
+    private User userWithId(UUID userId) {
+        User u = mock(User.class);
+        given(u.getUserId()).willReturn(userId);
+        return u;
     }
 
     @AfterEach

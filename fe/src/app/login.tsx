@@ -11,6 +11,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { BACKEND_URL } from "@/lib/api";
+import { registerPushToken } from "@/lib/push";
 
 const CALLBACK_PREFIX = "evcharger://oauth/callback";
 
@@ -84,6 +85,7 @@ export default function LoginScreen() {
         ["jwt_token", data.accessToken],
         ["refresh_token", data.refreshToken ?? ""],
       ]);
+      registerPushToken({ ask: true });
       router.replace("/(tabs)/mypage" as any);
     } else if (data.status === "NEED_PROFILE_SELECT") {
       router.replace({ pathname: "/register", params: { tempToken: data.tempToken } } as any);

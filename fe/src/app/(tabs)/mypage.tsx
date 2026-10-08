@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "@/lib/api";
+import { unregisterPushToken } from "@/lib/push";
 
 const MENU_ITEMS = [
   { label: "내 차량 관리", icon: "car-outline" as const, route: "/car-management" },
@@ -59,6 +60,10 @@ export default function MypageScreen() {
           try {
             const accessToken = await AsyncStorage.getItem("jwt_token");
             const refreshToken = await AsyncStorage.getItem("refresh_token");
+            if (accessToken) {
+              // 로그아웃 후에는 이 기기로 알림이 오지 않게 (인증이 필요해서 토큰 지우기 전에)
+              await unregisterPushToken();
+            }
             if (accessToken && refreshToken) {
               // accessToken은 api 인터셉터가 Authorization 헤더로 붙여줌
               await api.post("/auth/logout", { refreshToken });
@@ -83,7 +88,7 @@ export default function MypageScreen() {
           <TouchableOpacity style={S.iconBtn} onPress={() => router.push("/charger-alert-history" as any)}>
             <Ionicons name="notifications-outline" size={24} color="#333" />
           </TouchableOpacity>
-          <TouchableOpacity style={S.iconBtn}>
+          <TouchableOpacity style={S.iconBtn} onPress={() => router.push("/settings" as any)}>
             <Ionicons name="settings-outline" size={24} color="#333" />
           </TouchableOpacity>
         </View>

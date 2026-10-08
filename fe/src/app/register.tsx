@@ -8,6 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "@/lib/api";
+import { registerPushToken } from "@/lib/push";
 
 type ProfileImage = { id: number; imageUrl: string; name: string };
 
@@ -66,6 +67,7 @@ export default function RegisterScreen() {
           ["jwt_token", data.accessToken],
           ["refresh_token", data.refreshToken ?? ""],
         ]);
+        registerPushToken({ ask: true });
         router.replace("/(tabs)/mypage" as any);
       } else {
         Alert.alert("가입 실패", "잠시 후 다시 시도해주세요.");

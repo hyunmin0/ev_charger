@@ -78,8 +78,27 @@ const fetchHistory = useCallback(async () => {
     ]);
   };
 
+  // 누르면 읽음 처리 후 충전소 상세로 이동
+  const openItem = (item: AlertHistory) => {
+    if (!item.isRead) {
+      setHistory(prev => prev.map(h => h.id === item.id ? { ...h, isRead: true } : h));
+      api.patch(`/notifications/${item.id}/read`).catch(() => {
+        setHistory(prev => prev.map(h => h.id === item.id ? { ...h, isRead: false } : h));
+      });
+    }
+    if (item.statNm == null) {
+      Alert.alert("알림", "더 이상 운영하지 않는 충전소예요.");
+      return;
+    }
+    router.push(`/station/${item.statId}` as any);
+  };
+
   const renderItem = ({ item }: { item: AlertHistory }) => (
-    <View style={[S.item, !item.isRead && S.itemUnread]}>
+    <TouchableOpacity
+      style={[S.item, !item.isRead && S.itemUnread]}
+      activeOpacity={0.7}
+      onPress={() => openItem(item)}
+    >
       <View style={S.itemTop}>
         <Text style={S.stationName} numberOfLines={1}>{item.statNm ?? `충전소 ${item.statId}`}</Text>
         <Text style={S.timeAgo}>{formatTimeAgo(item.createdAt)}</Text>
@@ -92,7 +111,7 @@ const fetchHistory = useCallback(async () => {
       </View>
       <Text style={S.chargerInfo}>충전기 {item.chgerId} · 대기 전환 알림</Text>
       {!item.isRead && <View style={S.unreadDot} />}
-    </View>
+    </TouchableOpacity>
   );
 
   return (

@@ -39,4 +39,7 @@ public class FcmToken {
         this.user = user;
         this.token = token;
     }
+
+    // 한 기기에서 다른 계정으로 로그인하면 같은 토큰의 주인이 바뀜
+    public void changeUser(User user) { this.user = user; }
 }

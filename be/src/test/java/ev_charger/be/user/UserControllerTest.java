@@ -27,7 +27,6 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
@@ -328,23 +327,6 @@ class UserControllerTest {
     }
 
     @Test
-    void fcm토큰_등록시_이미_등록된_토큰이면_400을_반환한다() throws Exception {
-        // given
-        willThrow(new IllegalArgumentException("중복된 Fcm 토큰 값입니다.")).given(fcmTokenService).register(user, FCM_TOKEN);
-
-        // when
-        mockMvc.perform(post("/user/fcm-token")
-                        .with(authentication(auth))
-                        .param("fcmToken", FCM_TOKEN))
-
-                // then
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("중복된 Fcm 토큰 값입니다."));
-
-        verify(fcmTokenService).register(user, FCM_TOKEN);
-    }
-
-    @Test
     void fcm토큰_등록시_인증_정보가_없으면_401을_반환한다() throws Exception {
         // when
         mockMvc.perform(post("/user/fcm-token")
@@ -381,23 +363,6 @@ class UserControllerTest {
                 .andExpect(status().isBadRequest());
 
         verify(fcmTokenService, never()).delete(any(), any());
-    }
-
-    @Test
-    void fcm토큰_삭제시_등록되지_않은_토큰이면_400을_반환한다() throws Exception {
-        // given
-        willThrow(new IllegalArgumentException("Fcm 토큰이 존재하지 않습니다.")).given(fcmTokenService).delete(user, FCM_TOKEN);
-
-        // when
-        mockMvc.perform(delete("/user/fcm-token")
-                        .with(authentication(auth))
-                        .param("fcmToken", FCM_TOKEN))
-
-                // then
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Fcm 토큰이 존재하지 않습니다."));
-
-        verify(fcmTokenService).delete(user, FCM_TOKEN);
     }
 
     @Test
