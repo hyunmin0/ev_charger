@@ -21,6 +21,9 @@ public interface UserCarRepository extends JpaRepository<UserCar, Long> {
 
     Boolean existsByUserAndCar(User User, Car car);
 
+    // 챗봇: 요청에 실린 carId(car 테이블 id)가 이 유저의 차량인지
+    boolean existsByUserAndCar_CarId(User user, long carId);
+
     int countByUser(User user);
 
     @Query("select uc from UserCar uc where uc.user= :user")

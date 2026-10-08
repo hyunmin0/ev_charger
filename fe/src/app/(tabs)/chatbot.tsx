@@ -13,14 +13,11 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios from "axios";
 import api from "@/lib/api";
 
 const ACCENT = "#5B9CF6";
-const AI_URL = process.env.EXPO_PUBLIC_AI_URL ?? "";
-const INTERNAL_KEY = process.env.EXPO_PUBLIC_INTERNAL_KEY ?? "";
 
-type Station = { statId: string; statNm: string; addr: string; parkingFree: string; distance_km: number };
+type Station = { statId: string; statNm: string; addr: string; parkingFree: string; distance_km: number | null };
 type Msg = { id: string; role: "user" | "bot"; text: string; stations?: Station[] };
 type CarOption = { label: string; carId: number | null };
 
@@ -32,15 +29,6 @@ const INITIAL_MSGS: Msg[] = [
   },
 ];
 
-function decodeJwt(token: string): any {
-  try {
-    const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
-    return JSON.parse(atob(base64));
-  } catch {
-    return null;
-  }
-}
-
 export default function ChatScreen() {
   const [carList, setCarList] = useState<CarOption[]>([{ label: "선택 안함", carId: null }]);
   const [selectedCar, setSelectedCar] = useState<CarOption>({ label: "선택 안함", carId: null });
@@ -48,21 +36,13 @@ export default function ChatScreen() {
   const [msgs, setMsgs] = useState<Msg[]>([...INITIAL_MSGS]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
     (async () => {
-      // JWT에서 user_id 가져오기
-      const token = await AsyncStorage.getItem("jwt_token");
-      if (token) {
-        const payload = decodeJwt(token);
-        setUserId(payload?.sub ?? null);
-      }
-
       // 내 차량 목록 가져오기
       try {
-        const res = await api.get("/user/userCar");
+        const res = await api.get("/user/cars");
         const cars: CarOption[] = [
           { label: "선택 안함", carId: null },
           ...(res.data ?? []).map((c: any) => ({ label: c.carName, carId: c.carId })),
@@ -95,20 +75,18 @@ export default function ChatScreen() {
     setLoading(true);
 
     try {
-      const res = await axios.post(
-        `${AI_URL}/chat`,
+      // be가 JWT로 로그인 유저를 확인하고 AI 서버로 전달 (user_id·내부 키는 앱이 보내지 않음)
+      // AI가 tool을 여러 번 부르면 오래 걸려서 be의 AI 대기 시간(60초)보다 길게 잡음
+      const res = await api.post(
+        "/chat",
         {
-          user_id: userId ?? "00000000-0000-0000-0000-000000000000",
-          car_id: selectedCar.carId,
+          carId: selectedCar.carId,
           message: text,
           history,
           lat: location?.lat ?? null,
           lng: location?.lng ?? null,
         },
-        {
-          headers: { "X-Internal-Key": INTERNAL_KEY },
-          timeout: 30000,
-        }
+        { timeout: 70000 }
       );
 
       const botMsg: Msg = {
@@ -134,7 +112,7 @@ export default function ChatScreen() {
       <Text style={s.stationName} numberOfLines={1}>{station.statNm}</Text>
       <Text style={s.stationAddr} numberOfLines={1}>{station.addr}</Text>
       <View style={s.stationRow}>
-        <Text style={s.stationDist}>{station.distance_km.toFixed(1)}km</Text>
+        <Text style={s.stationDist}>{station.distance_km != null ? `${station.distance_km.toFixed(1)}km` : ""}</Text>
         {station.parkingFree === "Y" && (
           <View style={s.parkingBadge}><Text style={s.parkingTxt}>무료주차</Text></View>
         )}
