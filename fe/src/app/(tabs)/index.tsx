@@ -39,6 +39,8 @@ type Station = {
   statId: string;
   statNm: string;
   busiNm: string;
+  lat: number;
+  lng: number;
   hasFast: boolean;
   parkingFree: boolean;
   openToPublic: boolean;
@@ -47,6 +49,9 @@ type Station = {
   totalCount: number;
   distance: number;
   nextHourCongestionLevel: string | null;
+  hasCharging: boolean;
+  allUnknown: boolean;
+  allUnavailable: boolean;
 };
 
 const RADIUS_METERS = [1000, 3000, 5000, 10000, 20000];
@@ -66,26 +71,47 @@ function stationTags(s: Station) {
 const predColor = (p: string | null) =>
   p === "여유" ? "#4CAF50" : p === "보통" ? "#FF9800" : p === "혼잡" ? "#F44336" : "#aaa";
 
-// window.map으로 전역 선언해야 injectJavaScript에서 접근 가능
-const mapHTML = `<!DOCTYPE html><html><head>
+function makeMapHTML(initLat: number, initLng: number) {
+  return `<!DOCTYPE html><html><head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 * { margin:0; padding:0; }
 html,body,#map { width:100%; height:100%; }
 .loc-wrap { position:relative; width:50px; height:50px; display:flex; align-items:center; justify-content:center; }
-.loc-pulse { position:absolute; width:50px; height:50px; border-radius:50%; background:rgba(74,144,226,0.2); }
+.loc-pulse { position:absolute; width:60px; height:60px; border-radius:50%; background:rgba(74,144,226,0.2); }
 .loc-dot { width:14px; height:14px; border-radius:50%; background:#4A90E2; border:2.5px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,0.25); position:relative; z-index:1; }
-@keyframes lp { 0%{transform:scale(0.3);opacity:0.9} 100%{transform:scale(1);opacity:0} }
+.st-pin-wrap { cursor:pointer; display:block; }
 </style>
 </head><body><div id="map"></div>
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_API_KEY}&autoload=false"></script>
-<script>kakao.maps.load(function() {
+<script>
+function pinSVG(color) {
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="34" viewBox="0 0 26 34">'
+    + '<path d="M13 0C5.82 0 0 5.82 0 13c0 9.75 13 21 13 21s13-11.25 13-21C26 5.82 20.18 0 13 0z" fill="' + color + '" stroke="rgba(255,255,255,0.85)" stroke-width="1.5"/>'
+    + '<circle cx="13" cy="12.5" r="5" fill="white"/>'
+    + '</svg>';
+}
+function stationColor(s) {
+  if (s.availableCount > 0) return '#09AD12';
+  if (s.hasCharging) return '#EDA144';
+  if (s.allUnavailable) return '#EB0000';
+  if (s.allUnknown) return '#545050';
+  return '#545050';
+}
+document.addEventListener('click', function(e) {
+  var el = e.target;
+  while (el && !el.getAttribute('data-sid')) el = el.parentElement;
+  if (el) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'st', id: el.getAttribute('data-sid') }));
+  }
+});
+kakao.maps.load(function() {
   window.map = new kakao.maps.Map(document.getElementById('map'), {
-    center: new kakao.maps.LatLng(37.5665, 126.9780), level: 5
+    center: new kakao.maps.LatLng(${initLat}, ${initLng}), level: 5
   });
   kakao.maps.event.addListener(window.map, 'center_changed', function() {
-    var center = window.map.getCenter();
-    window.ReactNativeWebView.postMessage(JSON.stringify({ lat: center.getLat(), lng: center.getLng() }));
+    var c = window.map.getCenter();
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'center', lat: c.getLat(), lng: c.getLng() }));
   });
   window.moveToMyLocation = function(lat, lng) {
     var pos = new kakao.maps.LatLng(lat, lng);
@@ -96,14 +122,29 @@ html,body,#map { width:100%; height:100%; }
       window.myLocationDot = new kakao.maps.CustomOverlay({
         position: pos,
         content: '<div class="loc-wrap"><div class="loc-pulse"></div><div class="loc-dot"></div></div>',
-        xAnchor: 0.5,
-        yAnchor: 0.5,
-        zIndex: 10
+        xAnchor: 0.5, yAnchor: 0.5, zIndex: 10
       });
       window.myLocationDot.setMap(window.map);
     }
   };
-});</script></body></html>`;
+  window.stationMarkers = [];
+  window.updateStationMarkers = function(list) {
+    window.stationMarkers.forEach(function(m) { m.setMap(null); });
+    window.stationMarkers = [];
+    list.forEach(function(s) {
+      var color = stationColor(s);
+      var ov = new kakao.maps.CustomOverlay({
+        position: new kakao.maps.LatLng(s.lat, s.lng),
+        content: '<div class="st-pin-wrap" data-sid="' + s.statId + '">' + pinSVG(color) + '</div>',
+        xAnchor: 0.5, yAnchor: 1.0, zIndex: 5
+      });
+      ov.setMap(window.map);
+      window.stationMarkers.push(ov);
+    });
+  };
+});
+</script></body></html>`;
+}
 
 function StepSlider({ steps, value, onChange }: { steps: string[]; value: number; onChange: (i: number) => void }) {
   const sw = TRACK_WIDTH / (steps.length - 1);
@@ -156,20 +197,17 @@ export default function HomeScreen() {
   const [stationsLoading, setStationsLoading] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [fetchError, setFetchError] = useState(false);
-  const userLat = useRef(35.1595);
-  const userLng = useRef(126.8526);
-  // 지도 위치 이동용
+  const userLat = useRef(37.5665);
+  const userLng = useRef(126.9780);
   const webviewRef = useRef<any>(null);
   const mapLoaded = useRef(false);
+  const [mapReady, setMapReady] = useState(false);
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
   const pendingLocation = useRef<{ lat: number; lng: number } | null>(null);
-  // 마운트 시 두 번째 useEffect 중복 fetch 방지
   const isInitialMount = useRef(true);
 
-  // 현재 위치 파란 점 표시 + 지도 이동
   const moveToUserLocation = useCallback((lat: number, lng: number) => {
-    webviewRef.current?.injectJavaScript(
-      `window.moveToMyLocation(${lat}, ${lng}); true;`
-    );
+    webviewRef.current?.injectJavaScript(`window.moveToMyLocation(${lat}, ${lng}); true;`);
   }, []);
 
   const [sheetVisible, setSheetVisible] = useState(false);
@@ -212,12 +250,25 @@ export default function HomeScreen() {
 
   useEffect(() => {
     (async () => {
+      try {
+        const cached = await AsyncStorage.getItem("mapLocation");
+        if (cached) {
+          const c = JSON.parse(cached);
+          userLat.current = c.lat;
+          userLng.current = c.lng;
+          setMapCenter({ lat: c.lat, lng: c.lng });
+        } else {
+          setMapCenter({ lat: 37.5665, lng: 126.9780 });
+        }
+      } catch {
+        setMapCenter({ lat: 37.5665, lng: 126.9780 });
+      }
+
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === "granted") {
         const loc = await Location.getCurrentPositionAsync({});
         userLat.current = loc.coords.latitude;
         userLng.current = loc.coords.longitude;
-        // 맵이 이미 로드됐으면 바로 이동+마커, 아니면 대기열에 저장
         if (mapLoaded.current) {
           moveToUserLocation(loc.coords.latitude, loc.coords.longitude);
         } else {
@@ -229,13 +280,28 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    // 마운트 시에는 위 useEffect에서 위치 받은 후 fetch하므로 여기선 skip
     if (isInitialMount.current) {
       isInitialMount.current = false;
       return;
     }
     fetchStations();
   }, [radiusIdx, available]);
+
+  useEffect(() => {
+    if (!mapReady || stations.length === 0) return;
+    const payload = stations.map(s => ({
+      statId: s.statId,
+      lat: s.lat,
+      lng: s.lng,
+      availableCount: s.availableCount,
+      hasCharging: s.hasCharging,
+      allUnavailable: s.allUnavailable,
+      allUnknown: s.allUnknown,
+    }));
+    webviewRef.current?.injectJavaScript(
+      `window.updateStationMarkers(${JSON.stringify(payload)}); true;`
+    );
+  }, [stations, mapReady]);
 
   const [speedMin, setSpeedMin] = useState(1);
   const [speedMax, setSpeedMax] = useState(3);
@@ -354,26 +420,36 @@ export default function HomeScreen() {
 
   return (
     <View style={S.container}>
-      <WebView
-        ref={webviewRef}
-        source={{ html: mapHTML, baseUrl: "http://localhost" }}
-        style={StyleSheet.absoluteFill}
-        originWhitelist={["*"]}
-        javaScriptEnabled
-        domStorageEnabled
-        onLoadEnd={() => {
-          // 카카오 SDK 로드 완료 후 대기 중인 위치가 있으면 이동+마커
-          mapLoaded.current = true;
-          if (pendingLocation.current) {
-            moveToUserLocation(pendingLocation.current.lat, pendingLocation.current.lng);
-            pendingLocation.current = null;
-          }
-        }}
-        onMessage={(e) => {
-          const { lat, lng } = JSON.parse(e.nativeEvent.data);
-          AsyncStorage.setItem("mapLocation", JSON.stringify({ lat, lng }));
-        }}
-      />
+      {mapCenter && (
+        <WebView
+          ref={webviewRef}
+          source={{ html: makeMapHTML(mapCenter.lat, mapCenter.lng), baseUrl: "http://localhost" }}
+          style={StyleSheet.absoluteFill}
+          originWhitelist={["*"]}
+          javaScriptEnabled
+          domStorageEnabled
+          onLoadEnd={() => {
+            mapLoaded.current = true;
+            setTimeout(() => {
+              setMapReady(true);
+              if (pendingLocation.current) {
+                moveToUserLocation(pendingLocation.current.lat, pendingLocation.current.lng);
+                pendingLocation.current = null;
+              }
+            }, 1500);
+          }}
+          onMessage={(e) => {
+            try {
+              const data = JSON.parse(e.nativeEvent.data);
+              if (data.type === "st") {
+                router.push(`/station/${data.id}` as any);
+              } else if (data.type === "center") {
+                AsyncStorage.setItem("mapLocation", JSON.stringify({ lat: data.lat, lng: data.lng }));
+              }
+            } catch {}
+          }}
+        />
+      )}
 
       <SafeAreaView edges={["top"]} style={S.topOverlay} pointerEvents="box-none">
         <View style={S.searchRow}>
@@ -384,9 +460,7 @@ export default function HomeScreen() {
         </View>
       </SafeAreaView>
 
-      {/* 충전소 목록 시트 — handle + filter chip bar 포함 */}
       <Animated.View style={[S.listSheet, { transform: [{ translateY: listSheetY }] }]}>
-        {/* 드래그 가능한 헤더 */}
         <View {...listPan.panHandlers} style={S.listHeader}>
           <View style={S.listHandleBar}>
             <View style={S.listHandle} />
@@ -408,7 +482,6 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* 칩 누르면 sheet 안에 인라인 팝업 */}
         {popupChip && (
           <View style={S.inlinePopup}>
             {popupChip === "radius" && (
@@ -469,7 +542,6 @@ export default function HomeScreen() {
         />
       </Animated.View>
 
-      {/* 전체 필터 바텀시트 (≡ 눌렀을 때) */}
       <Modal visible={sheetVisible} transparent animationType="none" onRequestClose={closeFullSheet}>
         <TouchableOpacity style={S.backdrop} activeOpacity={1} onPress={closeFullSheet} />
         <Animated.View style={[S.sheet, { transform: [{ translateY: slideAnim }] }]}>
@@ -548,7 +620,6 @@ const S = StyleSheet.create({
   searchRow: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 4 },
   searchBar: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderRadius: 12, paddingHorizontal: 14, height: 44, shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 6, elevation: 4 },
   searchInput: { flex: 1, fontSize: 15, color: "#222" },
-
   listSheet: {
     position: "absolute", bottom: 0, left: 0, right: 0, height: LIST_MAX,
     backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20,
@@ -564,9 +635,7 @@ const S = StyleSheet.create({
   chipOn: { backgroundColor: ACCENT_BG, borderColor: ACCENT },
   chipTxt: { fontSize: 12, color: "#555", fontWeight: "500" },
   chipTxtOn: { color: ACCENT, fontWeight: "600" },
-
   inlinePopup: { paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: "#f0f0f0", backgroundColor: "#fafafa" },
-
   card: { paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#f5f5f5" },
   cardRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 },
   cardName: { fontSize: 15, fontWeight: "700", color: "#111", flex: 1, marginRight: 8, lineHeight: 21 },
@@ -585,7 +654,6 @@ const S = StyleSheet.create({
   availTotal: { fontSize: 13, color: "#aaa" },
   predBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
   predTxt: { fontSize: 12, fontWeight: "600" },
-
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.3)" },
   sheet: { position: "absolute", bottom: 0, left: 0, right: 0, height: SHEET_HEIGHT, backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: SHEET_PAD },
   handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#ddd", alignSelf: "center", marginTop: 12 },
