@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   FlatList,
   KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -160,17 +159,15 @@ export default function ChatScreen() {
       )}
 
       {/* 메시지 + 입력바 */}
-      <KeyboardAvoidingView
-        style={s.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={60}
-      >
+      {/* edgeToEdgeEnabled라 Android도 창이 줄지 않아서 padding으로 직접 올림 */}
+      <KeyboardAvoidingView style={s.flex} behavior="padding">
         <FlatList
           ref={flatListRef}
           data={msgs}
           keyExtractor={m => m.id}
           contentContainerStyle={s.list}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+          onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
           renderItem={({ item }) =>
             item.role === "user" ? (
               <View style={s.rowUser}>
