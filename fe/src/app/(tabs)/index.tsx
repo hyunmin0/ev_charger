@@ -69,7 +69,7 @@ function stationTags(s: Station) {
 }
 
 const predColor = (p: string | null) =>
-  p === "여유" ? "#4CAF50" : p === "보통" ? "#FF9800" : p === "혼잡" ? "#F44336" : "#aaa";
+  p === "여유" ? "#C8E4CB" : p === "보통" ? "#F1E8B1" : p === "혼잡" ? "#F6D2D4" : "#eee";
 
 function makeMapHTML(initLat: number, initLng: number) {
   return `<!DOCTYPE html><html><head>
@@ -407,8 +407,8 @@ export default function HomeScreen() {
             <Text style={S.availTotal}>/{item.totalCount}</Text>
           </View>
           {pred && (
-            <View style={[S.predBadge, { backgroundColor: predColor(pred) + "22" }]}>
-              <Text style={[S.predTxt, { color: predColor(pred) }]}>
+            <View style={[S.predBadge, { backgroundColor: predColor(pred) }]}>
+              <Text style={S.predTxt}>
                 1시간 뒤 {pred} 예상
               </Text>
             </View>
@@ -653,7 +653,7 @@ const S = StyleSheet.create({
   availNum: { fontSize: 14, fontWeight: "700" },
   availTotal: { fontSize: 13, color: "#aaa" },
   predBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
-  predTxt: { fontSize: 12, fontWeight: "600" },
+  predTxt: { fontSize: 12, fontWeight: "600", color: "#333" },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.3)" },
   sheet: { position: "absolute", bottom: 0, left: 0, right: 0, height: SHEET_HEIGHT, backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: SHEET_PAD },
   handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#ddd", alignSelf: "center", marginTop: 12 },

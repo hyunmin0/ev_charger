@@ -209,9 +209,11 @@ class StationControllerTest {
                 .andExpect(jsonPath("$.stations[0].statId").value(STAT_ID))
                 .andExpect(jsonPath("$.stations[0].statNm").value(STAT_NM))
                 .andExpect(jsonPath("$.stations[0].distance").value(DISTANCE))
+                .andExpect(jsonPath("$.stations[0].nextHourCongestionLevel").value("여유"))
                 .andExpect(jsonPath("$.stations[1].statId").value(SECOND_STAT_ID))
                 .andExpect(jsonPath("$.stations[1].statNm").value(SECOND_STAT_NM))
                 .andExpect(jsonPath("$.stations[1].distance").value(SECOND_DISTANCE))
+                .andExpect(jsonPath("$.stations[1].nextHourCongestionLevel").isEmpty())
                 .andExpect(jsonPath("$.nextCursor").value(NEXT_CURSOR));
 
         verify(stationService).getNearbyStations(nearbyStationRequest);
@@ -387,7 +389,13 @@ class StationControllerTest {
                 .andExpect(jsonPath("$.statNm").value(STAT_NM))
                 .andExpect(jsonPath("$.isFavorite").isEmpty())
                 .andExpect(jsonPath("$.chargers[0].chgerId").value(CHGER_ID))
-                .andExpect(jsonPath("$.chargers[0].isAlert").value(false));
+                .andExpect(jsonPath("$.chargers[0].isAlert").value(false))
+                // 충전기 상태는 앱이 상수 이름으로 받음
+                .andExpect(jsonPath("$.chargers[0].chgerStat").value("WAITING"))
+                // 혼잡도는 상수 이름이 아니라 한글 코드로 나감
+                .andExpect(jsonPath("$.congestions.oneHour").value("여유"))
+                .andExpect(jsonPath("$.congestions.twoHour").value("보통"))
+                .andExpect(jsonPath("$.congestions.threeHour").value("혼잡"));
 
         verify(stationService).getStationDetail(null, STAT_ID);
     }

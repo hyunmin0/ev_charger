@@ -99,7 +99,7 @@ function chgerStatKey(stat: ChgerStat) {
 }
 
 const congColor = (level: CongestionLevel) =>
-  level === "여유" ? "#4CAF50" : level === "보통" ? "#FF9800" : level === "혼잡" ? "#F44336" : "#aaa";
+  level === "여유" ? "#C8E4CB" : level === "보통" ? "#F1E8B1" : level === "혼잡" ? "#F6D2D4" : "#eee";
 
 function formatDate(iso: string) {
   return iso.slice(0, 10).replace(/-/g, ".");
@@ -497,7 +497,7 @@ const styles = StyleSheet.create({
   sectionSub: { fontSize: 13, color: "#555" },
   congItem: { alignItems: "center", gap: 4 },
   congBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
-  congLabel: { fontSize: 12, color: "#fff", fontWeight: "600" },
+  congLabel: { fontSize: 12, color: "#333", fontWeight: "600" },
   congTime: { fontSize: 11, color: "#888" },
   chargerGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   chargerCard: { width: (SCREEN_WIDTH - 52) / 2, borderRadius: 12, padding: 14 },
