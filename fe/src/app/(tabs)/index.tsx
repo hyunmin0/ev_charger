@@ -8,7 +8,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import * as Location from "expo-location";
 import api from "@/lib/api";
 
@@ -55,6 +55,7 @@ type Station = {
 };
 
 const RADIUS_METERS = [1000, 3000, 5000, 10000, 20000];
+const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
 function formatDistance(m: number) {
   return m >= 1000 ? `${(m / 1000).toFixed(1)}km` : `${Math.round(m)}m`;
@@ -218,9 +219,10 @@ export default function HomeScreen() {
   const [openOnly, setOpenOnly] = useState(false);
   const [radiusIdx, setRadiusIdx] = useState(1);
 
-  const fetchStations = useCallback(async (cursor?: string | null) => {
+  // background: 주기 새로고침. 실패해도 기존 목록을 그대로 둠
+  const fetchStations = useCallback(async (cursor?: string | null, background = false) => {
     setStationsLoading(true);
-    if (!cursor) setFetchError(false);
+    if (!cursor && !background) setFetchError(false);
     try {
       const res = await api.get("/stations/nearby", {
         params: {
@@ -237,9 +239,11 @@ export default function HomeScreen() {
       } else {
         setStations(data.stations ?? []);
       }
-      setNextCursor(data.nextCursor ?? null);
+      // be는 반경 안 충전소를 한 번에 다 주고도 nextCursor를 항상 채워 보냄
+      // -> 빈 페이지가 오면 더 없는 것으로 보고 멈춤 (안 그러면 목록 끝에서 빈 요청이 끝없이 반복됨)
+      setNextCursor(data.stations?.length ? data.nextCursor ?? null : null);
     } catch {
-      if (!cursor) {
+      if (!cursor && !background) {
         setFetchError(true);
         setStations([]);
       }
@@ -286,6 +290,16 @@ export default function HomeScreen() {
     }
     fetchStations();
   }, [radiusIdx, available]);
+
+  // 충전기 상태는 EC2가 5분마다 갱신함 -> 지도 탭을 보고 있는 동안 5분마다 다시 불러옴
+  const fetchStationsRef = useRef(fetchStations);
+  fetchStationsRef.current = fetchStations;
+  useFocusEffect(
+    useCallback(() => {
+      const timer = setInterval(() => fetchStationsRef.current(null, true), REFRESH_INTERVAL_MS);
+      return () => clearInterval(timer);
+    }, [])
+  );
 
   useEffect(() => {
     if (!mapReady || stations.length === 0) return;
@@ -532,7 +546,7 @@ export default function HomeScreen() {
           renderItem={renderStation}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 20 }}
-          onEndReached={() => { if (nextCursor) fetchStations(nextCursor); }}
+          onEndReached={() => { if (nextCursor && !stationsLoading) fetchStations(nextCursor); }}
           onEndReachedThreshold={0.3}
           ListFooterComponent={stationsLoading ? <ActivityIndicator style={{ padding: 16 }} color={ACCENT} /> : null}
           ListEmptyComponent={
