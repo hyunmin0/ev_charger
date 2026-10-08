@@ -84,18 +84,28 @@ const CHGER_TYPE_LABEL: Record<ChgerType, string> = {
   DC_COMBO2_BUS: "DC콤보2(버스)",
 };
 
-const CHGER_STATUS_CONFIG: Record<string, { color: string; bg: string; label: string }> = {
-  available: { color: "#4CAF50", bg: "#F0FBF0", label: "충전가능" },
-  charging:  { color: "#FF9800", bg: "#FFF8F0", label: "충전중"  },
-  reserved:  { color: "#F44336", bg: "#FFF0F0", label: "예약중"  },
-  unknown:   { color: "#aaa",    bg: "#f5f5f5", label: "상태불명" },
+// 색 구분은 지도 마커와 같음: 사용불가(운영중지·점검중·예약중)는 빨강, 상태를 모르는 경우(통신이상·미확인·알수없음)는 회색
+const CHGER_STATUS_COLOR = {
+  available:   { color: "#4CAF50", bg: "#F0FBF0" },
+  charging:    { color: "#FF9800", bg: "#FFF8F0" },
+  unavailable: { color: "#F44336", bg: "#FFF0F0" },
+  unknown:     { color: "#aaa",    bg: "#f5f5f5" },
 };
 
-function chgerStatKey(stat: ChgerStat) {
-  if (stat === "WAITING") return "available";
-  if (stat === "CHARGING") return "charging";
-  if (stat === "RESERVED") return "reserved";
-  return "unknown";
+const CHGER_STATUS: Record<ChgerStat, { group: keyof typeof CHGER_STATUS_COLOR; label: string }> = {
+  WAITING:     { group: "available",   label: "충전가능" },
+  CHARGING:    { group: "charging",    label: "충전중" },
+  RESERVED:    { group: "unavailable", label: "예약중" },
+  SUSPENDED:   { group: "unavailable", label: "운영중지" },
+  INSPECTION:  { group: "unavailable", label: "점검중" },
+  COMM_ERROR:  { group: "unknown",     label: "통신이상" },
+  UNCONFIRMED: { group: "unknown",     label: "상태미확인" },
+  UNKNOWN:     { group: "unknown",     label: "알수없음" },
+};
+
+function chgerStatus(stat: ChgerStat) {
+  const s = CHGER_STATUS[stat] ?? CHGER_STATUS.UNKNOWN;
+  return { ...s, ...CHGER_STATUS_COLOR[s.group] };
 }
 
 const congColor = (level: CongestionLevel) =>
@@ -217,7 +227,7 @@ export default function StationDetailScreen() {
     station.kind,
   ] : [];
 
-  const availableCount = station?.chargers.filter(c => chgerStatKey(c.chgerStat) === "available").length ?? 0;
+  const availableCount = station?.chargers.filter(c => c.chgerStat === "WAITING").length ?? 0;
 
   const congestionItems: { time: string; level: CongestionLevel }[] = station?.congestions ? [
     { time: "1시간 뒤", level: station.congestions.oneHour },
@@ -348,8 +358,7 @@ export default function StationDetailScreen() {
           </View>
           <View style={styles.chargerGrid}>
             {station.chargers.map((c) => {
-              const key = chgerStatKey(c.chgerStat);
-              const cfg = CHGER_STATUS_CONFIG[key];
+              const cfg = chgerStatus(c.chgerStat);
               return (
                 <View key={c.chgerId} style={[styles.chargerCard, { backgroundColor: cfg.bg }]}>
                   <View style={[styles.statusDot, { backgroundColor: cfg.color }]} />
@@ -357,7 +366,7 @@ export default function StationDetailScreen() {
                   <Text style={styles.chargerType}>{CHGER_TYPE_LABEL[c.chgerType] ?? c.chgerType}</Text>
                   <Text style={styles.chargerSpeed}>충전 출력 {c.output ?? "-"}</Text>
                   {/* 충전대기는 알림이 필요 없음. 이미 걸린 알림은 해제할 수 있게 남겨 둠 */}
-                  {(key !== "available" || c.isAlert) && (
+                  {(cfg.group !== "available" || c.isAlert) && (
                     <TouchableOpacity
                       style={styles.bellBtn}
                       onPress={() => toggleAlert(c)}

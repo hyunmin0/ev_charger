@@ -406,13 +406,18 @@ export default function HomeScreen() {
             <Text style={[S.availNum, { color: item.availableCount > 0 ? ACCENT : "#aaa" }]}>{item.availableCount}</Text>
             <Text style={S.availTotal}>/{item.totalCount}</Text>
           </View>
-          {pred && (
+          {/* 지금 쓸 수 없는 충전소는 예측 대신 상태를 보여줌 (색은 지도 마커와 같은 기준) */}
+          {item.allUnavailable ? (
+            <Text style={[S.stateTxt, { color: "#F44336" }]}>사용불가</Text>
+          ) : item.allUnknown ? (
+            <Text style={[S.stateTxt, { color: "#999" }]}>알수없음</Text>
+          ) : pred ? (
             <View style={[S.predBadge, { backgroundColor: predColor(pred) }]}>
               <Text style={S.predTxt}>
                 1시간 뒤 {pred} 예상
               </Text>
             </View>
-          )}
+          ) : null}
         </View>
       </TouchableOpacity>
     );
@@ -654,6 +659,7 @@ const S = StyleSheet.create({
   availTotal: { fontSize: 13, color: "#aaa" },
   predBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
   predTxt: { fontSize: 12, fontWeight: "600", color: "#333" },
+  stateTxt: { fontSize: 13, fontWeight: "700" },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.3)" },
   sheet: { position: "absolute", bottom: 0, left: 0, right: 0, height: SHEET_HEIGHT, backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: SHEET_PAD },
   handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#ddd", alignSelf: "center", marginTop: 12 },
