@@ -116,7 +116,8 @@ html,body,#map { width:100%; height:100%; }
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_API_KEY}&autoload=false"></script>
 <script>
 function pinSVG(color) {
-  return '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="34" viewBox="0 0 26 34">'
+  // 표시 크기 20x26 (path 좌표는 viewBox 26x34 기준)
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="26" viewBox="0 0 26 34">'
     + '<path d="M13 0C5.82 0 0 5.82 0 13c0 9.75 13 21 13 21s13-11.25 13-21C26 5.82 20.18 0 13 0z" fill="' + color + '" stroke="rgba(255,255,255,0.85)" stroke-width="1.5"/>'
     + '<circle cx="13" cy="12.5" r="5" fill="white"/>'
     + '</svg>';
