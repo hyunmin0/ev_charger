@@ -2,7 +2,7 @@
 -- 실행: table.sql 실행 후, station_data.sql보다 먼저 psql에서 \encoding UTF8 → \i C:/projects/ev_charger/sql/station_operator.sql
 -- 다시 실행해도 됨: 같은 busiId는 이 파일 값으로 덮어씀 → 이름, 전화번호를 고칠 때는 이 파일을 수정하고 다시 실행
 --
--- busiId, busiNm: 운영기관 코드표 기준 (코드표에 없는 5개는 station.csv의 이름)
+-- busiId, busiNm: 운영기관 코드표 기준 (코드표에 없는 6개는 station.csv의 이름)
 -- busiCall: 운영기관 대표번호 (충전소별 번호가 아니라 고객센터 번호)
 --  - 기본: station.csv의 같은 운영기관 충전소 번호 중 가장 많이 나온 번호
 --    (숫자만 비교, 대표번호 형식(1xxx-xxxx)을 지역번호보다 우선, 잘린 번호·좌표 등 형식이 잘못된 값은 제외)
@@ -217,6 +217,7 @@ values
     ('EW', '코레일', '010-3364-2533'), -- 코드표에 없음, 이름은 CSV 값
     ('GT', '이지트로닉스', '031-881-9819'), -- 코드표에 없음, 이름은 CSV 값
     ('MX', '모트렉스이브이', '02-2135-3065'), -- 코드표에 없음, 이름은 CSV 값
+    ('PT', '현승(주)', '031-656-5962'), -- 코드표에 없음, 이름은 CSV 값
     ('WS', '관공서', '032-580-1170') -- 코드표에 없음, 이름은 CSV 값
 on conflict ("busiId") do update
 set "busiNm" = excluded."busiNm",
