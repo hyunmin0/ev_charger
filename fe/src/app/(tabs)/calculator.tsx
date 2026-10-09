@@ -135,6 +135,11 @@ export default function CalculatorScreen() {
           setCar(prev => options.some(c => c.label === prev) ? prev : BASE_CARS[0].label);
         })
         .catch(() => {}); // 비로그인이면 무시
+      // 다른 탭으로 옮기면 열려 있던 드롭다운을 닫음 (탭 화면은 마운트된 채로 남아서 돌아오면 열려 있음)
+      return () => {
+        setDropCar(false);
+        setDropCharger(false);
+      };
     }, [])
   );
 

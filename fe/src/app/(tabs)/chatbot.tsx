@@ -56,6 +56,8 @@ export default function ChatScreen() {
           // 차량 목록 못 불러와도 계속 진행
         }
       })();
+      // 다른 탭으로 옮기면 열려 있던 차량 선택 드롭다운을 닫음 (탭 화면은 마운트된 채로 남아서 돌아오면 열려 있음)
+      return () => setDropVisible(false);
     }, [])
   );
 
