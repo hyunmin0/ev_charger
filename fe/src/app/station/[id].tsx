@@ -1,13 +1,14 @@
 import React, { useState, useCallback } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions,
-  ActivityIndicator, Alert, Modal, TextInput,
+  ActivityIndicator, Alert, Modal, TextInput, Linking, Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import api from "@/lib/api";
 import { requireLogin } from "@/lib/auth";
+import { ensurePushPermission, registerPushToken } from "@/lib/push";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -45,6 +46,8 @@ type StationDetail = {
   statNm: string;
   addr: string;
   addrDetail: string | null;
+  lat: number;
+  lng: number;
   useTime: string;
   parkingFree: boolean | null;
   note: string | null;
@@ -167,15 +170,41 @@ export default function StationDetailScreen() {
     }
   }, [station, bookmarked, bookmarkLoading]);
 
+  // 지도: geo: 링크 -> 휴대폰이 설치된 지도 앱(구글맵·카카오맵·네이버지도·티맵 등) 중 고르는 창을 띄움
+  // 공통 링크라 경로가 아니라 충전소 위치가 열림 (길찾기는 고른 앱에서)
+  // geo:를 받을 앱이 없거나 iOS면 카카오맵 웹 지도로
+  const openMap = async () => {
+    if (!station) return;
+    const { lat, lng, statNm } = station;
+    const web = `https://map.kakao.com/link/map/${encodeURIComponent(statNm)},${lat},${lng}`;
+    try {
+      if (Platform.OS !== "android") throw new Error("geo: 미지원");
+      await Linking.openURL(`geo:${lat},${lng}?q=${lat},${lng}(${encodeURIComponent(statNm)})`);
+    } catch {
+      Linking.openURL(web).catch(() => Alert.alert("오류", "지도를 열지 못했어요."));
+    }
+  };
+
   const toggleAlert = useCallback(async (chger: ChgerDetail) => {
     if (!station || alertLoading.has(chger.chgerId)) return;
     if (!(await requireLogin())) return;
+    // 알림을 켤 때 휴대폰 알림 권한이 없으면 권한 동의 창을 띄움 (거절해도 알림 설정 자체는 저장)
+    const permGranted = chger.isAlert ? true : await ensurePushPermission();
+    // 권한을 방금 허용한 경우 이 기기 토큰을 be에 등록 (이미 등록됐으면 그냥 넘어감)
+    if (!chger.isAlert && permGranted) registerPushToken({ ask: false });
     setAlertLoading(prev => new Set([...prev, chger.chgerId]));
     try {
       if (chger.isAlert) {
         await api.delete(`/charger-alerts/${station.statId}/${chger.chgerId}`);
       } else {
         await api.post(`/charger-alerts/${station.statId}/${chger.chgerId}`);
+        if (!permGranted) {
+          // 두 번 거절하면 앱에서 다시 물을 수 없어서 휴대폰 설정으로 보냄
+          Alert.alert("알림 권한이 꺼져 있어요", "설정에서 알림을 허용해 주세요.", [
+            { text: "닫기", style: "cancel" },
+            { text: "설정 열기", onPress: () => Linking.openSettings() },
+          ]);
+        }
       }
       setStation(prev => prev ? {
         ...prev,
@@ -300,6 +329,9 @@ export default function StationDetailScreen() {
           <View style={styles.infoRow}>
             <Ionicons name="location-outline" size={17} color="#5B9CF6" style={styles.infoIcon} />
             <Text style={styles.infoText}>{station.addr}{station.addrDetail ? ` ${station.addrDetail}` : ""}</Text>
+            <TouchableOpacity onPress={openMap} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={styles.telLink}>지도</Text>
+            </TouchableOpacity>
           </View>
           <View style={styles.infoRow}>
             <Ionicons name="time-outline" size={17} color="#5B9CF6" style={styles.infoIcon} />
@@ -308,7 +340,16 @@ export default function StationDetailScreen() {
           <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
             <Ionicons name="call-outline" size={17} color="#5B9CF6" style={styles.infoIcon} />
             <Text style={styles.infoText}>{station.busiCall ?? "-"}</Text>
-            {station.busiCall ? <Text style={styles.telLink}>전화</Text> : null}
+            {station.busiCall ? (
+              // tel: 링크는 바로 걸지 않고 전화 앱에 번호만 채워서 열어줌
+              <TouchableOpacity
+                onPress={() => Linking.openURL(`tel:${station.busiCall!.replace(/[^0-9+]/g, "")}`)
+                  .catch(() => Alert.alert("오류", "전화 앱을 열지 못했어요."))}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.telLink}>전화</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         </View>
 
@@ -495,7 +536,7 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: "row", alignItems: "center", paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: "#f5f5f5" },
   infoIcon: { marginRight: 10 },
   infoText: { flex: 1, fontSize: 13, color: "#333" },
-  telLink: { fontSize: 12, color: "#5B9CF6", fontWeight: "600" },
+  telLink: { fontSize: 12, color: "#5B9CF6", fontWeight: "600", marginLeft: 8 },
   extraCard: { backgroundColor: "#fff", marginHorizontal: 16, borderRadius: 14, paddingHorizontal: 16, marginBottom: 20, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
   extraRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: "#f5f5f5" },
   extraLabel: { fontSize: 13, color: "#888" },

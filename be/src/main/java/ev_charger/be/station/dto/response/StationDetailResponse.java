@@ -12,6 +12,8 @@ public record StationDetailResponse(
         String statNm,
         String addr,
         String addrDetail,
+        double lat, // 지도 앱으로 위치를 열 때 쓰는 좌표
+        double lng,
         String useTime,
         Boolean parkingFree,
         String note,

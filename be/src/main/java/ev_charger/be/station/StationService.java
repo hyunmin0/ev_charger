@@ -172,6 +172,8 @@ public class StationService {
                 station.getStatNm(),
                 station.getAddr(),
                 station.getAddrDetail(),
+                station.getLocation().getY(), // Point: x = 경도, y = 위도
+                station.getLocation().getX(),
                 station.getUseTime(),
                 station.getParkingFree() != null ? YN.Y.equals(station.getParkingFree()) : null,
                 station.getNote(),

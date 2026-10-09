@@ -180,7 +180,7 @@ class StationControllerTest {
 
     private StationDetailResponse createStationDetailResponse(Boolean isFavorite, boolean isAlert) {
         return new StationDetailResponse(
-                STAT_ID, STAT_NM, ADDR, null, USE_TIME, true, null, true, null, KIND, null, null, FLOOR_TYPE,
+                STAT_ID, STAT_NM, ADDR, null, LAT, LNG, USE_TIME, true, null, true, null, KIND, null, null, FLOOR_TYPE,
                 true, BUSI_NM, BUSI_CALL, 4.5, 10, isFavorite,
                 List.of(new StationDetailResponse.ChgerDetail(CHGER_ID, ChgerType.DC_COMBO, CHGER_OUTPUT, ChgerStat.WAITING, isAlert)),
                 List.of(),

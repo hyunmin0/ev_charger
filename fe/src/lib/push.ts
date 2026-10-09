@@ -34,6 +34,20 @@ export async function setPushEnabled(enabled: boolean) {
   await AsyncStorage.setItem(PUSH_ENABLED_KEY, enabled ? "1" : "0");
 }
 
+/**
+ * 휴대폰 알림 권한 확인, 없으면 권한 동의 창을 띄움
+ * 두 번 거절했으면(canAskAgain=false) 창을 띄울 수 없음 -> 휴대폰 설정에서 켜야 함
+ * @returns 허용됐으면 true
+ */
+export async function ensurePushPermission() {
+  await ensurePushChannel();
+  let perm = await Notifications.getPermissionsAsync();
+  if (!perm.granted && perm.canAskAgain) {
+    perm = await Notifications.requestPermissionsAsync();
+  }
+  return perm.granted;
+}
+
 // 이번 실행에서 be에 등록한 토큰. 같은 토큰을 반복해서 보내지 않기 위함
 let registeredToken: string | null = null;
 

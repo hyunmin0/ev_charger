@@ -8,7 +8,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
 import {
-  ensurePushChannel, isPushEnabled, setPushEnabled, registerPushToken, unregisterPushToken,
+  ensurePushPermission, isPushEnabled, setPushEnabled, registerPushToken, unregisterPushToken,
 } from "@/lib/push";
 
 const ACCENT = "#5B9CF6";
@@ -42,12 +42,7 @@ export default function SettingsScreen() {
 
   const turnOn = async () => {
     await setPushEnabled(true);
-    await ensurePushChannel();
-    let perm = await Notifications.getPermissionsAsync();
-    if (!perm.granted && perm.canAskAgain) {
-      perm = await Notifications.requestPermissionsAsync();
-    }
-    if (!perm.granted) {
+    if (!(await ensurePushPermission())) {
       // 두 번 거절하면 앱에서 다시 물을 수 없어서 휴대폰 설정으로 보냄
       Alert.alert("알림 권한이 꺼져 있어요", "휴대폰 설정에서 이 앱의 알림을 허용해 주세요.", [
         { text: "취소", style: "cancel" },
