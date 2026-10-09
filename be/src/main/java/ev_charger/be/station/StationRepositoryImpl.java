@@ -14,6 +14,7 @@ import jakarta.persistence.Tuple;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.query.NativeQuery;
 import org.springframework.stereotype.Repository;
+import ev_charger.be.station.dto.request.StationSearchRequest;
 
 import java.util.List;
 import java.util.UUID;
@@ -292,7 +293,61 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
                 .toList();
     }
 
+        /**
+     * 충전소 이름 키워드 검색 (거리순)
+     */
+    @Override
+    public List<StationResponse> searchStationsByKeyword(StationSearchRequest request) {
+        String sql = """
+            select s."statId",
+                s."statNm",
+                s.addr,
+                ST_Y(s.location::geometry) lat,
+                ST_X(s.location::geometry) lng,
+                s."useTime",
+                s."parkingFree",
+                s."limitYn",
+                s.kind,
+                s."floorType",
+                count(c."chgerType") filter (where c."chgerType" not in ('02', '07', '08')) > 0 "hasFast",
+                so."busiNm",
+                count(c."chgerId") "totalCount",
+                count(c."chgerId") filter (where c.stat = '2') "availableCount",
+                count(c."chgerId") filter (where c.stat = '3') > 0 "hasCharging",
+                count(c."chgerId") filter (where c.stat in ('0', '1', '9')) = count(c."chgerId") "allUnknown",
+                count(c."chgerId") filter (where c.stat in ('4', '5', '6')) = count(c."chgerId") "allUnavailable",
+                rv."averageRating",
+                rv."reviewCount",
+                ST_Distance(s.location, ST_MakePoint(:lng, :lat)::geography) distance,
+                case when count(c."chgerId") filter (where c.stat in ('2', '3', '6')) = 0 then null else cg."congestionLevel" end "nextHourCongestionLevel"
+            from station s
+                join charger c on s."statId" = c."statId"
+                join station_operator so on s."busiId" = so."busiId"
+                left join lateral (
+                    select round(avg(r.rating)::numeric, 1) "averageRating", count(*) "reviewCount"
+                    from review r
+                    where r."statId" = s."statId"
+                    ) rv on true
+                left join lateral (
+                    select cg."congestionLevel"
+                    from congestion cg
+                    where cg."statId" = s."statId" and cg."targetTime" = 1
+                    order by cg."predictedAt" desc
+                    limit 1
+                    ) cg on true
+            where s."statNm" ILIKE '%' || :keyword || '%'
+            group by s."statId", s."statNm", s.addr, s.location, s."useTime", s."parkingFree", s."limitYn", s.kind, s."floorType", so."busiNm", cg."congestionLevel", rv."averageRating", rv."reviewCount"
+            order by distance
+            limit 20
+            """;
 
+        Query query = em.createNativeQuery(sql, Tuple.class);
+        query.setParameter("lat", request.lat());
+        query.setParameter("lng", request.lng());
+        query.setParameter("keyword", request.keyword());
+
+        return toResponse(query.getResultList());
+    }
     @Override
     public List<StationResponse> findFavoriteStations(UUID userId, double lat, double lng) {
         String sql = """

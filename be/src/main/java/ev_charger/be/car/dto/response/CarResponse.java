@@ -8,7 +8,9 @@ public record CarResponse(
         String model,
         String trim, // 없으면 null
         int modelYear,
-        float batteryCapacity
+        float batteryCapacity,
+        int wheelSize,
+        String driveType
 ) {
     public static CarResponse from(Car car) {
         return new CarResponse(
@@ -17,7 +19,9 @@ public record CarResponse(
                 car.getModel(),
                 car.getTrim(),
                 car.getModelYear(),
-                car.getBatteryCapacity()
+                car.getBatteryCapacity(),
+                car.getWheelSize(),
+                car.getDriveType()
         );
     }
 }

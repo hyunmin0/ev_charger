@@ -310,8 +310,34 @@ export default function HomeScreen() {
   const pendingLocation = useRef<{ lat: number; lng: number } | null>(null);
   const isInitialMount = useRef(true);
 
+  // 검색
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Station[]>([]);
+  const [searchVisible, setSearchVisible] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+
   const moveToUserLocation = useCallback((lat: number, lng: number, zoomIn = false) => {
     webviewRef.current?.injectJavaScript(`window.moveToMyLocation(${lat}, ${lng}, ${zoomIn}); true;`);
+  }, []);
+
+  const handleSearch = useCallback(async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      setSearchVisible(false);
+      return;
+    }
+    setSearchLoading(true);
+    setSearchVisible(true);
+    try {
+      const res = await api.get("/stations/search", {
+        params: { keyword: query, lat: userLat.current, lng: userLng.current },
+      });
+      setSearchResults(res.data ?? []);
+    } catch {
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
   }, []);
 
   const [sheetVisible, setSheetVisible] = useState(false);
@@ -894,9 +920,66 @@ export default function HomeScreen() {
       <SafeAreaView edges={["top"]} style={S.topOverlay} pointerEvents="box-none">
         <View style={S.searchRow}>
           <View style={S.searchBar}>
-            <TextInput placeholder="충전소 검색" style={S.searchInput} placeholderTextColor="#999" />
-            <Ionicons name="search-outline" size={20} color="#999" />
+            <TextInput
+              placeholder="충전소 검색"
+              style={S.searchInput}
+              placeholderTextColor="#999"
+              value={searchQuery}
+              onChangeText={(text) => {
+                setSearchQuery(text);
+                // 검색어를 지우면 드롭다운도 닫음
+                if (!text.trim()) {
+                  setSearchResults([]);
+                  setSearchVisible(false);
+                }
+              }}
+              onSubmitEditing={() => handleSearch(searchQuery)}
+              returnKeyType="search"
+            />
+            {searchQuery.length > 0 ? (
+              // 검색어가 있으면 X 버튼 (탭하면 초기화)
+              <TouchableOpacity onPress={() => { setSearchQuery(""); setSearchResults([]); setSearchVisible(false); }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close-circle" size={20} color="#bbb" />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity onPress={() => handleSearch(searchQuery)}>
+                <Ionicons name="search-outline" size={20} color="#999" />
+              </TouchableOpacity>
+            )}
           </View>
+          {/* 검색 결과 드롭다운 */}
+          {searchVisible && (
+            <View style={S.searchDropdown}>
+              {searchLoading ? (
+                <ActivityIndicator style={{ padding: 16 }} color={ACCENT} />
+              ) : searchResults.length === 0 ? (
+                <Text style={S.searchEmpty}>검색 결과가 없어요</Text>
+              ) : (
+                <FlatList
+                  data={searchResults}
+                  keyExtractor={(item) => item.statId}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={S.searchItem}
+                      onPress={() => {
+                        setSearchVisible(false);
+                        setSearchQuery("");
+                        setSearchResults([]);
+                        router.push(`/station/${item.statId}` as any);
+                      }}
+                    >
+                      <Text style={S.searchItemName} numberOfLines={1}>{item.statNm}</Text>
+                      <Text style={S.searchItemDist}>{formatDistance(item.distance)}</Text>
+                    </TouchableOpacity>
+                  )}
+                  keyboardShouldPersistTaps="handled"
+                  style={{ maxHeight: 300 }}
+                  showsVerticalScrollIndicator={false}
+                />
+              )}
+            </View>
+          )}
         </View>
         <TouchableOpacity style={S.myLocBtn} onPress={goToMyLocation} disabled={locating}>
           {locating
@@ -1057,6 +1140,19 @@ const S = StyleSheet.create({
   searchRow: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 4 },
   searchBar: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderRadius: 12, paddingHorizontal: 14, height: 44, shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 6, elevation: 4 },
   searchInput: { flex: 1, fontSize: 15, color: "#222" },
+  searchDropdown: {
+    backgroundColor: "#fff", borderRadius: 12, marginTop: 6,
+    shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 8, elevation: 6,
+    overflow: "hidden",
+  },
+  searchEmpty: { textAlign: "center", color: "#aaa", fontSize: 14, padding: 16 },
+  searchItem: {
+    paddingHorizontal: 16, paddingVertical: 13,
+    borderBottomWidth: 1, borderBottomColor: "#f0f0f0",
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+  },
+  searchItemName: { fontSize: 14, color: "#222", flex: 1, marginRight: 8 },
+  searchItemDist: { fontSize: 12, color: "#888" },
   myLocBtn: {
     alignSelf: "flex-end", marginRight: 16, marginTop: 8, width: 44, height: 44, borderRadius: 22,
     backgroundColor: "#fff", alignItems: "center", justifyContent: "center",

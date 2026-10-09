@@ -30,7 +30,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import ev_charger.be.station.dto.request.StationSearchRequest;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -85,6 +85,9 @@ public class StationService {
     public List<StationResponse> getStationsInBounds(MapBoundsRequest request) {
         return stationRepository.findStationsInBoundsWithFilter(request, MAX_BOUNDS_STATIONS);
     }
+    public List<StationResponse> searchStations(StationSearchRequest request) {
+    return stationRepository.searchStationsByKeyword(request);
+}
 
     /**
      * 지역별 충전소 요약 (지도를 줌아웃했을 때)

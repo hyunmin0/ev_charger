@@ -3,6 +3,7 @@ package ev_charger.be.station;
 import ev_charger.be.security.CustomUserDetails;
 import ev_charger.be.station.dto.request.MapBoundsRequest;
 import ev_charger.be.station.dto.request.NearbyStationRequest;
+import ev_charger.be.station.dto.request.StationSearchRequest;
 import ev_charger.be.station.dto.response.NearbyStationPageResponse;
 import ev_charger.be.station.dto.response.RegionSummaryResponse;
 import ev_charger.be.station.dto.response.StationDetailResponse;
@@ -12,7 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
-
+import ev_charger.be.station.dto.request.StationSearchRequest;
 import java.util.List;
 
 @RestController
@@ -39,6 +40,11 @@ public class StationController {
             @ModelAttribute MapBoundsRequest request) { // URL 파라미터를 DTO로 한번에 받음
         return ResponseEntity.ok(stationService.getStationsInBounds(request));
     }
+    @GetMapping("/search")
+public ResponseEntity<List<StationResponse>> searchStations(
+        @ModelAttribute StationSearchRequest request) {
+    return ResponseEntity.ok(stationService.searchStations(request));
+}
 
     // 지역별 충전소 요약 (지도를 줌아웃했을 때)
     // input : level = sido(시·도, 기본값) | city(도 안의 시·군 + 광역시)

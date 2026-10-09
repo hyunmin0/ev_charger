@@ -22,6 +22,8 @@ type CarResult = {
   trim: string | null;
   modelYear: number;
   batteryCapacity: number;
+  wheelSize: number;
+  driveType: string;
 };
 
 export default function CarManagementScreen() {
@@ -235,7 +237,7 @@ export default function CarManagementScreen() {
                     <Text style={S.resultName}>
                       {car.brand} {car.model}{car.trim ? ` ${car.trim}` : ""}
                     </Text>
-                    <Text style={S.resultSub}>{car.modelYear}년형 · {car.batteryCapacity}kWh</Text>
+                    <Text style={S.resultSub}>{car.modelYear}년형 · {car.batteryCapacity}kWh · {car.wheelSize}인치 · {car.driveType}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>

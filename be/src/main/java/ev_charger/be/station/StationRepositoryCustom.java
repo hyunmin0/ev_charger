@@ -2,6 +2,7 @@ package ev_charger.be.station;
 
 import ev_charger.be.station.dto.request.MapBoundsRequest;
 import ev_charger.be.station.dto.request.NearbyStationRequest;
+import ev_charger.be.station.dto.request.StationSearchRequest;
 import ev_charger.be.station.dto.response.RegionSummaryResponse;
 import ev_charger.be.station.dto.response.StationResponse;
 
@@ -18,4 +19,6 @@ public interface StationRepositoryCustom {
     List<RegionSummaryResponse> findRegionSummaries();
 
     List<RegionSummaryResponse> findCitySummaries();
+
+    List<StationResponse> searchStationsByKeyword(StationSearchRequest request);
 }
