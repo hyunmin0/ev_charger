@@ -1,7 +1,7 @@
-import React, { useRef, useState, useEffect, useCallback } from "react";
+import React, { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Animated, Dimensions, Modal, Switch,
+  TextInput, Animated, Dimensions, Modal, Switch, AppState,
   PanResponder, FlatList, ActivityIndicator, Alert, Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -23,19 +23,51 @@ const ACCENT = "#5B9CF6";
 const ACCENT_BG = "#EBF3FF";
 const LIST_PEEK = 72;
 const LIST_MAX = SCREEN_HEIGHT * 0.65;
+// 리스트 바 3단계 (translateY 값): 전체 / 중간 / 접힘
+const LIST_SNAPS = [0, LIST_MAX - SCREEN_HEIGHT * 0.35, LIST_MAX - LIST_PEEK];
+const LIST_FULL = 0;
+const LIST_MID = 1;
+const LIST_COLLAPSED = LIST_SNAPS.length - 1;
+// 리스트 바를 이 속도(px/ms)보다 빠르게 밀면 조금만 움직여도 그 방향으로 한 단계 (위/아래 같은 기준)
+const LIST_FLING_VY = 0.8;
+// 이 속도보다 빠르게 "슉" 내려야 중간을 건너뛰고 바로 접힘 (보통으로 내리면 한 단계씩)
+const LIST_COLLAPSE_VY = 3.0;
+// 이만큼(px) 끌고 놓으면 그 방향 단계로 감 (덜 움직이면 제자리)
+const LIST_DRAG_MIN = 60;
+// 손을 놓은 뒤 단계로 움직이는 스프링 (stiffness 낮을수록 느긋하게, damping은 2*sqrt(stiffness) 근처면 출렁임 없이 멈춤)
+const LIST_SPRING_STIFFNESS = 200;
+const LIST_SPRING_DAMPING = 30;
 
 const FILTER_CHIPS = [
   { id: "radius" }, { id: "available" }, { id: "parking" },
   { id: "open" }, { id: "speed" }, { id: "type" },
   { id: "facility" }, { id: "floor" },
 ];
-// 마지막 "전체"는 반경 대신 지도 화면 기준으로 불러옴
-const RADIUS_STEPS = ["1km", "3km", "5km", "10km", "전체"];
-const ALL_RADIUS_IDX = RADIUS_STEPS.length - 1;
+// "지도 기준" 버튼을 켜면 반경 대신 지도 화면 기준으로 불러옴
+const RADIUS_STEPS = ["1km", "3km", "5km", "10km"];
 const SPEED_STEPS = ["3kW", "7kW", "50kW", "100kW", "200kW", "400kW"];
+const SPEED_KW = [3, 7, 50, 100, 200, 400];
+const SPEED_LAST_IDX = SPEED_STEPS.length - 1;
 const CHARGER_TYPES = ["DC 차데모", "DC 콤보", "DC 콤보 (완속)", "DC 콤보2(버스전용)", "AC3 상", "AC 완속", "NACS"];
 const FACILITIES = ["공공시설", "주차시설", "휴게시설", "관광시설", "상업시설", "차량정비시설", "기타시설", "공동주택시설", "근린생활시설", "교육문화시설"];
 const FLOOR_TYPES = ["지상", "지하"];
+
+// be로 보내는 코드값 (be ChgerType / Kind / FloorType enum 기준)
+// 충전기 타입은 복합 타입도 있어서, 고른 타입을 지원하는 코드를 모두 보냄 (예: DC 차데모 -> 차데모+AC3, 차데모+콤보 포함)
+const CHARGER_TYPE_CODES: Record<string, string[]> = {
+  "DC 차데모": ["01", "03", "05", "06"],
+  "DC 콤보": ["04", "05", "06", "10"],
+  "DC 콤보 (완속)": ["08"],
+  "DC 콤보2(버스전용)": ["11"],
+  "AC3 상": ["03", "06", "07"],
+  "AC 완속": ["02"],
+  "NACS": ["09", "10"],
+};
+const FACILITY_CODES: Record<string, string> = {
+  "공공시설": "A0", "주차시설": "B0", "휴게시설": "C0", "관광시설": "D0", "상업시설": "E0",
+  "차량정비시설": "F0", "기타시설": "G0", "공동주택시설": "H0", "근린생활시설": "I0", "교육문화시설": "J0",
+};
+const FLOOR_CODES: Record<string, string> = { "지상": "F", "지하": "B" };
 
 type Region = { code: string; name: string; stationCount: number; availableStationCount: number; lat: number; lng: number };
 type MapView = { level: number; minLat: number; maxLat: number; minLng: number; maxLng: number };
@@ -289,12 +321,39 @@ export default function HomeScreen() {
   const [freeParking, setFreeParking] = useState(false);
   const [openOnly, setOpenOnly] = useState(false);
   const [radiusIdx, setRadiusIdx] = useState(1);
-  const isAllMode = radiusIdx === ALL_RADIUS_IDX;
+  const [isAllMode, setIsAllMode] = useState(false);
+  // 위치 권한 허용 여부 (바뀌면 위치 추적을 다시 시작)
+  const [locGranted, setLocGranted] = useState(false);
+  // 위치 권한이 없어서 지도 기준이 된 상태인지 (직접 고른 지도 기준과 구분)
+  const forcedAllMode = useRef(false);
   // "전체" 모드: 지도가 마지막으로 멈춘 화면 범위, 시·도 요약을 보여주는 중인지
   const lastView = useRef<MapView | null>(null);
   const [regionMode, setRegionMode] = useState(false);
   const viewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewSeq = useRef(0);
+
+  const [speedMin, setSpeedMin] = useState(0);
+  const [speedMax, setSpeedMax] = useState(SPEED_LAST_IDX);
+  const [selTypes, setSelTypes] = useState<string[]>([]);
+  const [selFacilities, setSelFacilities] = useState<string[]>([]);
+  const [selFloor, setSelFloor] = useState<string[]>([]);
+
+  // 켠 필터만 filter.* 파라미터로 보냄 (be StationFilter: 안 보낸 값은 조건 미적용)
+  // 리스트는 콤마로 이어 보냄 -> spring이 List<String>으로 나눠서 받음
+  const filterParams = useMemo(() => {
+    const p: Record<string, string | number | boolean> = {};
+    if (available) p["filter.availableOnly"] = true;
+    if (freeParking) p["filter.parkingFree"] = true;
+    if (openOnly) p["filter.limitYn"] = true;
+    // 슬라이더 양 끝은 제한 없음 (3kW 미만, 400kW 초과도 포함)
+    if (speedMin > 0) p["filter.minOutput"] = SPEED_KW[speedMin];
+    if (speedMax < SPEED_LAST_IDX) p["filter.maxOutput"] = SPEED_KW[speedMax];
+    const types = [...new Set(selTypes.flatMap(t => CHARGER_TYPE_CODES[t] ?? []))];
+    if (types.length) p["filter.chgerTypes"] = types.join(",");
+    if (selFacilities.length) p["filter.kinds"] = selFacilities.map(f => FACILITY_CODES[f]).join(",");
+    if (selFloor.length) p["filter.floorTypes"] = selFloor.map(f => FLOOR_CODES[f]).join(",");
+    return p;
+  }, [available, freeParking, openOnly, speedMin, speedMax, selTypes, selFacilities, selFloor]);
 
   // background: 주기 새로고침. 실패해도 기존 목록을 그대로 둠
   const fetchStations = useCallback(async (cursor?: string | null, background = false) => {
@@ -306,7 +365,7 @@ export default function HomeScreen() {
           lat: userLat.current,
           lng: userLng.current,
           range: RADIUS_METERS[radiusIdx],
-          "filter.availableOnly": available,
+          ...filterParams,
           ...(cursor ? { cursor } : {}),
         },
       });
@@ -327,7 +386,7 @@ export default function HomeScreen() {
     } finally {
       setStationsLoading(false);
     }
-  }, [radiusIdx, available]);
+  }, [radiusIdx, filterParams]);
 
   const showRegions = useCallback((list: Region[], zoomTo = 0) => {
     webviewRef.current?.injectJavaScript(`window.updateRegions && window.updateRegions(${JSON.stringify(list)}, ${zoomTo}); true;`);
@@ -351,7 +410,7 @@ export default function HomeScreen() {
           params: {
             minLat: view.minLat, maxLat: view.maxLat, minLng: view.minLng, maxLng: view.maxLng,
             userLat: userLat.current, userLng: userLng.current,
-            "filter.availableOnly": available,
+            ...filterParams,
           },
         });
         if (seq !== viewSeq.current) return;
@@ -368,7 +427,7 @@ export default function HomeScreen() {
     } finally {
       if (seq === viewSeq.current) setStationsLoading(false);
     }
-  }, [available, showRegions]);
+  }, [filterParams, showRegions]);
 
   useEffect(() => {
     (async () => {
@@ -387,18 +446,63 @@ export default function HomeScreen() {
       }
 
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === "granted") {
-        const loc = await Location.getCurrentPositionAsync({});
-        userLat.current = loc.coords.latitude;
-        userLng.current = loc.coords.longitude;
-        if (mapLoaded.current) {
-          moveToUserLocation(loc.coords.latitude, loc.coords.longitude);
-        } else {
-          pendingLocation.current = { lat: loc.coords.latitude, lng: loc.coords.longitude };
-        }
+      if (status !== "granted") {
+        // 위치를 모르면 "내 위치에서 반경"이 의미 없음 -> 지도 기준으로 (지도가 멈추면 onMessage의 view에서 불러옴)
+        forcedAllMode.current = true;
+        setIsAllMode(true);
+        return;
+      }
+      setLocGranted(true);
+      const loc = await Location.getCurrentPositionAsync({});
+      userLat.current = loc.coords.latitude;
+      userLng.current = loc.coords.longitude;
+      if (mapLoaded.current) {
+        moveToUserLocation(loc.coords.latitude, loc.coords.longitude);
+      } else {
+        pendingLocation.current = { lat: loc.coords.latitude, lng: loc.coords.longitude };
       }
       fetchStations();
     })();
+  }, []);
+
+  // 지도 기준 -> 내 위치에서 반경: 위치 권한이 없으면 동의 창을 다시 띄움, 끝내 거절하면 지도 기준 그대로
+  const switchToRadiusMode = async () => {
+    try {
+      let perm = await Location.getForegroundPermissionsAsync();
+      if (!perm.granted && perm.canAskAgain) perm = await Location.requestForegroundPermissionsAsync();
+      if (!perm.granted) {
+        forcedAllMode.current = true;
+        Alert.alert("위치 권한이 필요해요", "설정에서 위치 권한을 허용해 주세요.", [
+          { text: "취소", style: "cancel" },
+          { text: "설정 열기", onPress: () => Linking.openSettings() },
+        ]);
+        return;
+      }
+      forcedAllMode.current = false;
+      setLocGranted(true);
+      // 위치를 먼저 잡고 모드를 바꿔야 반경 목록이 내 위치 기준으로 불러와짐 (최근 위치가 있으면 바로 사용)
+      const last = await Location.getLastKnownPositionAsync({ maxAge: LAST_LOCATION_MAX_AGE_MS });
+      const loc = last ?? await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      userLat.current = loc.coords.latitude;
+      userLng.current = loc.coords.longitude;
+      moveToUserLocation(loc.coords.latitude, loc.coords.longitude, true);
+      setIsAllMode(false);
+    } catch {
+      Alert.alert("오류", "현재 위치를 가져오지 못했어요.");
+    }
+  };
+
+  // 휴대폰 설정에서 위치 권한을 켜고 돌아오면, 권한이 없어서 지도 기준이 됐던 경우에만 반경 모드로 되돌림
+  // (사용자가 직접 지도 기준을 고른 경우는 그대로 둠)
+  const switchToRadiusRef = useRef(switchToRadiusMode);
+  switchToRadiusRef.current = switchToRadiusMode;
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", async (state) => {
+      if (state !== "active" || !forcedAllMode.current) return;
+      const perm = await Location.getForegroundPermissionsAsync();
+      if (perm.granted) switchToRadiusRef.current();
+    });
+    return () => sub.remove();
   }, []);
 
   useEffect(() => {
@@ -415,7 +519,7 @@ export default function HomeScreen() {
       showRegions([]);
       fetchStations();
     }
-  }, [radiusIdx, available]);
+  }, [radiusIdx, isAllMode, filterParams]);
 
   // 충전기 상태는 EC2가 5분마다 갱신함 -> 지도 탭을 보고 있는 동안 5분마다 다시 불러옴
   const isAllModeRef = useRef(isAllMode);
@@ -436,6 +540,7 @@ export default function HomeScreen() {
         ]);
         return;
       }
+      setLocGranted(true);
       // 새 GPS 위치를 잡는 데 몇 초 걸려서, 기기가 이미 알고 있는 최근 위치로 먼저 바로 옮김
       const last = await Location.getLastKnownPositionAsync({ maxAge: LAST_LOCATION_MAX_AGE_MS });
       if (last) applyMyLocation(last.coords.latitude, last.coords.longitude);
@@ -469,7 +574,7 @@ export default function HomeScreen() {
       let sub: Location.LocationSubscription | null = null;
       let cancelled = false;
       (async () => {
-        // 권한은 묻지 않음: 처음 화면과 내 위치 버튼에서 이미 물어봄
+        // 권한은 묻지 않음: 처음 화면, 내 위치 버튼, 반경 모드 전환에서 물어봄 (허용되면 locGranted로 다시 실행)
         const perm = await Location.getForegroundPermissionsAsync();
         if (!perm.granted || cancelled) return;
         const s = await Location.watchPositionAsync(
@@ -491,7 +596,7 @@ export default function HomeScreen() {
         cancelled = true;
         sub?.remove();
       };
-    }, [])
+    }, [locGranted])
   );
 
   const refreshRef = useRef(() => {});
@@ -523,27 +628,109 @@ export default function HomeScreen() {
     );
   }, [stations, mapReady]);
 
-  const [speedMin, setSpeedMin] = useState(1);
-  const [speedMax, setSpeedMax] = useState(3);
-  const [selTypes, setSelTypes] = useState<string[]>([]);
-  const [selFacilities, setSelFacilities] = useState<string[]>([]);
-  const [selFloor, setSelFloor] = useState<string[]>([]);
-
-  const listSheetY = useRef(new Animated.Value(LIST_MAX - LIST_PEEK)).current;
+  const listSheetY = useRef(new Animated.Value(LIST_SNAPS[LIST_COLLAPSED])).current;
   const dragStart = useRef(0);
-  const listPan = useRef(PanResponder.create({
-    onStartShouldSetPanResponder: () => false,
-    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6,
-    onPanResponderGrant: () => { dragStart.current = (listSheetY as any)._value; },
-    onPanResponderMove: (_, g) => {
-      const next = Math.max(0, Math.min(LIST_MAX - LIST_PEEK, dragStart.current + g.dy));
+  const grantDy = useRef(0);
+  // 네이티브 애니메이션 도중엔 JS 쪽 값(_value)이 출발점에 멈춰 있음 -> 리스너를 달아 매 프레임 실제 위치를 받아 옴
+  // (안 그러면 전체 -> 접힘 도중에 잡았을 때 "전체"에서 끄는 걸로 계산돼서 전체로 펼쳐짐)
+  useEffect(() => {
+    const id = listSheetY.addListener(() => {});
+    return () => listSheetY.removeListener(id);
+  }, [listSheetY]);
+  // 지금 멈춰 있는 단계 (LIST_SNAPS 인덱스). 목록 스크롤은 중간·전체에서 됨
+  const [listSnap, setListSnap] = useState(LIST_COLLAPSED);
+  const listSnapRef = useRef(LIST_COLLAPSED);
+  const listScrollY = useRef(0);
+
+  // vy: 손을 놓을 때 속도(px/ms). 그 속도를 이어받아 감속하며 멈춤 (0이면 가만히 있다가 부드럽게 출발)
+  const moveListSheet = (idx: number, vy = 0) => {
+    listSnapRef.current = idx;
+    setListSnap(idx);
+    // 접으면 열려 있던 칩 팝업도 닫음 (안 그러면 같은 칩을 다시 눌렀을 때 "닫기"로 처리돼서 한 번 씹힘)
+    if (idx === LIST_COLLAPSED) setPopupChip(null);
+    // 목표 쪽으로 움직이던 속도만 이어받음 (반대 방향 속도를 넘기면 그쪽으로 갔다가 되돌아옴, 예: 전체에서 위로 올리고 놓을 때)
+    const dist = LIST_SNAPS[idx] - (listSheetY as any)._value;
+    const towardVy = Math.abs(dist) > 1 && Math.sign(dist) === Math.sign(vy) ? vy : 0;
+    Animated.spring(listSheetY, {
+      toValue: LIST_SNAPS[idx],
+      velocity: towardVy * 1000, // spring의 velocity는 px/s
+      stiffness: LIST_SPRING_STIFFNESS,
+      damping: LIST_SPRING_DAMPING,
+      overshootClamping: true, // 단계를 넘어 튕기지 않게
+      useNativeDriver: true,
+    }).start();
+  };
+  // 손을 뗄 때 끈 방향으로 감 (절반을 넘겨야 하는 방식이면 올리다 마는 일이 생김)
+  //  - 아래로 아주 빠르게 (LIST_COLLAPSE_VY): 어디서든 바로 접힘
+  //  - 위로 LIST_DRAG_MIN 이상: 지금 위치 바로 위 단계 (접힘 -> 중간 -> 전체)
+  //  - 아래로 LIST_DRAG_MIN 이상 또는 LIST_FLING_VY보다 빠르게: 지금 위치 바로 아래 단계 (전체 -> 중간)
+  //  - 거의 안 움직였으면 원래 단계로
+  const settleListSheet = (vy: number) => {
+    const cur = (listSheetY as any)._value;
+    const moved = cur - dragStart.current;
+    const nearest = (y: number) => LIST_SNAPS.reduce((best, s, i) =>
+      Math.abs(s - y) < Math.abs(LIST_SNAPS[best] - y) ? i : best, 0);
+    let idx: number;
+    if (vy > LIST_COLLAPSE_VY) idx = LIST_COLLAPSED;
+    else if (moved < -LIST_DRAG_MIN || vy < -LIST_FLING_VY) {
+      // 위로: cur보다 위(값이 작거나 같은) 단계 중 가장 가까운 것
+      idx = LIST_FULL;
+      LIST_SNAPS.forEach((s, i) => { if (s <= cur && s > LIST_SNAPS[idx]) idx = i; });
+    } else if (moved > LIST_DRAG_MIN || vy > LIST_FLING_VY) {
+      // 아래로: cur보다 아래(값이 크거나 같은) 단계 중 가장 가까운 것
+      idx = LIST_COLLAPSED;
+      LIST_SNAPS.forEach((s, i) => { if (s >= cur && s < LIST_SNAPS[idx]) idx = i; });
+    } else idx = nearest(dragStart.current);
+    moveListSheet(idx, vy);
+  };
+  // PanResponder는 처음 한 번만 만들어서, 최신 settleListSheet를 ref로 부름 (코드 수정이 Fast Refresh로 바로 반영되게)
+  const settleRef = useRef(settleListSheet);
+  settleRef.current = settleListSheet;
+  const moveListSheetRef = useRef(moveListSheet);
+  moveListSheetRef.current = moveListSheet;
+  const isVerticalDrag = (g: { dx: number; dy: number }) =>
+    Math.abs(g.dy) > 10 && Math.abs(g.dy) > Math.abs(g.dx);
+  const sheetPanHandlers = {
+    onPanResponderTerminationRequest: () => false,
+    // 드래그로 인식되기까지 움직인 거리(grantDy)는 빼고 따라가게 (안 빼면 시작할 때 그만큼 툭 튐)
+    onPanResponderGrant: (_: unknown, g: { dy: number }) => {
+      listSheetY.stopAnimation();
+      dragStart.current = (listSheetY as any)._value;
+      grantDy.current = g.dy;
+    },
+    onPanResponderMove: (_: unknown, g: { dy: number }) => {
+      const next = Math.max(LIST_SNAPS[LIST_FULL],
+        Math.min(LIST_SNAPS[LIST_COLLAPSED], dragStart.current + g.dy - grantDy.current));
       listSheetY.setValue(next);
     },
-    onPanResponderRelease: () => {
-      const cur = (listSheetY as any)._value;
-      const snap = cur > (LIST_MAX - LIST_PEEK) / 2 ? LIST_MAX - LIST_PEEK : 0;
-      Animated.spring(listSheetY, { toValue: snap, useNativeDriver: true, bounciness: 0 }).start();
+    onPanResponderRelease: (_: unknown, g: { vy: number }) => settleRef.current(g.vy),
+    // 드래그를 뺏겨도 중간에 멈춰 있지 않게
+    onPanResponderTerminate: (_: unknown, g: { vy: number }) => settleRef.current(g.vy),
+  };
+  // 손잡이·칩 줄: 세로로 끌면 항상 바를 움직임 (칩 가로 스크롤보다 먼저 가져옴, 가로로 밀면 칩 스크롤)
+  // 접혀 있을 때 빈 곳(칩 버튼 말고)을 탭하면 중간으로 펼침 -> 버튼은 자기가 터치를 먼저 가져가서 여기로 안 옴
+  const listPan = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => listSnapRef.current === LIST_COLLAPSED,
+    onMoveShouldSetPanResponder: (_, g) => isVerticalDrag(g),
+    onMoveShouldSetPanResponderCapture: (_, g) => isVerticalDrag(g),
+    ...sheetPanHandlers,
+    // 탭으로 잡았다가 가로로 밀면 칩 가로 스크롤에 넘겨줌
+    onPanResponderTerminationRequest: (_, g) => Math.abs(g.dx) > Math.abs(g.dy),
+    onPanResponderRelease: (_, g) => {
+      const isTap = Math.abs(g.dx) < 8 && Math.abs(g.dy) < 8;
+      if (isTap && listSnapRef.current === LIST_COLLAPSED) moveListSheetRef.current(LIST_MID);
+      else settleRef.current(g.vy);
     },
+  })).current;
+  // 목록: 접혀 있으면 끌어서 펼침, 중간·전체일 땐 목록 스크롤 (맨 위에서 아래로 당길 때만 바를 내림)
+  const listBodyPan = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponderCapture: (_, g) => {
+      if (!isVerticalDrag(g)) return false;
+      if (listSnapRef.current === LIST_COLLAPSED) return true;
+      return g.dy > 0 && listScrollY.current <= 0;
+    },
+    ...sheetPanHandlers,
   })).current;
 
   const openFullSheet = () => {
@@ -563,9 +750,7 @@ export default function HomeScreen() {
     if (id === "open") { setOpenOnly(v => !v); return; }
     const next = popupChip === id ? null : id;
     setPopupChip(next);
-    if (next) {
-      Animated.spring(listSheetY, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
-    }
+    if (next) moveListSheet(LIST_FULL);
   };
 
   const toggle = (arr: string[], v: string, set: (a: string[]) => void) =>
@@ -573,7 +758,7 @@ export default function HomeScreen() {
 
   const chipLabel = (id: string) => {
     const open = popupChip === id;
-    if (id === "radius") return isAllMode ? "전체 지역" : `반경 ${RADIUS_STEPS[radiusIdx]}`;
+    if (id === "radius") return isAllMode ? "지도 기준" : `반경 ${RADIUS_STEPS[radiusIdx]}`;
     if (id === "speed") return `${SPEED_STEPS[speedMin]}~${SPEED_STEPS[speedMax]}`;
     if (id === "available") return "충전 가능";
     if (id === "parking") return "무료 주차장";
@@ -590,12 +775,36 @@ export default function HomeScreen() {
       available,
       parking: freeParking,
       open: openOnly,
+      speed: speedMin > 0 || speedMax < SPEED_LAST_IDX,
       type: selTypes.length > 0,
       facility: selFacilities.length > 0,
       floor: selFloor.length > 0,
     };
     return map[id] ?? false;
   };
+
+  // 반경 설정 (칩 팝업, 필터 시트 공용): "지도 기준"을 켜면 반경 선택 바를 숨김, 다시 누르면 전에 고른 반경으로 돌아감
+  const radiusSection = (
+    <>
+      <View style={S.secRow}>
+        <View style={S.secTitleRow}>
+          {/* 지도 기준일 땐 흐리게 (비활성처럼), 누르면 반경 모드로 돌아감 */}
+          <TouchableOpacity onPress={switchToRadiusMode} disabled={!isAllMode}>
+            <Text style={[S.secTitle, isAllMode && S.secTitleOff]}>내 위치에서 반경</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => {
+            if (isAllMode) { switchToRadiusMode(); return; }
+            forcedAllMode.current = false; // 직접 고른 지도 기준
+            setIsAllMode(true);
+          }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={[S.textBtn, isAllMode && S.textBtnOn]}>지도 기준</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={S.secVal}>{isAllMode ? "지금 보이는 지도" : `~${RADIUS_STEPS[radiusIdx]}`}</Text>
+      </View>
+      {!isAllMode && <StepSlider steps={RADIUS_STEPS} value={radiusIdx} onChange={setRadiusIdx} />}
+    </>
+  );
 
   const renderStation = ({ item }: { item: Station }) => {
     const tags = stationTags(item);
@@ -720,20 +929,12 @@ export default function HomeScreen() {
 
         {popupChip && (
           <View style={S.inlinePopup}>
-            {popupChip === "radius" && (
-              <>
-                <View style={S.secRow}>
-                  <Text style={S.secTitle}>내 위치에서 반경</Text>
-                  <Text style={S.secVal}>{isAllMode ? "지도 화면 전체" : `~${RADIUS_STEPS[radiusIdx]}`}</Text>
-                </View>
-                <StepSlider steps={RADIUS_STEPS} value={radiusIdx} onChange={setRadiusIdx} />
-              </>
-            )}
+            {popupChip === "radius" && radiusSection}
             {popupChip === "speed" && (
               <>
                 <View style={S.secRow}>
                   <Text style={S.secTitle}>충전 속도</Text>
-                  <TouchableOpacity onPress={() => { setSpeedMin(1); setSpeedMax(3); }}>
+                  <TouchableOpacity onPress={() => { setSpeedMin(0); setSpeedMax(SPEED_LAST_IDX); }}>
                     <Text style={S.secVal}>기본값</Text>
                   </TouchableOpacity>
                 </View>
@@ -757,12 +958,17 @@ export default function HomeScreen() {
           </View>
         )}
 
+        <View style={{ flex: 1 }} {...listBodyPan.panHandlers}>
         <FlatList
           data={stations}
           keyExtractor={(item) => item.statId}
           renderItem={renderStation}
+          scrollEnabled={listSnap !== LIST_COLLAPSED}
+          onScroll={(e) => { listScrollY.current = e.nativeEvent.contentOffset.y; }}
+          scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 20 }}
+          // 중간 단계에선 바 아래쪽이 화면 밖이라 그만큼 여백을 더 줘야 마지막 충전소까지 보임
+          contentContainerStyle={{ paddingBottom: 20 + (listSnap === LIST_COLLAPSED ? 0 : LIST_SNAPS[listSnap]) }}
           onEndReached={() => { if (nextCursor && !stationsLoading) fetchStations(nextCursor); }}
           onEndReachedThreshold={0.3}
           ListFooterComponent={stationsLoading ? <ActivityIndicator style={{ padding: 16 }} color={ACCENT} /> : null}
@@ -776,6 +982,7 @@ export default function HomeScreen() {
             ) : null
           }
         />
+        </View>
       </Animated.View>
 
       <Modal visible={sheetVisible} transparent animationType="none" onRequestClose={closeFullSheet}>
@@ -784,13 +991,7 @@ export default function HomeScreen() {
           <View style={S.handle} />
           <Text style={S.sheetTitle}>필터 설정</Text>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
-            <View style={S.sec}>
-              <View style={S.secRow}>
-                <Text style={S.secTitle}>내 위치에서 반경</Text>
-                <Text style={S.secVal}>{isAllMode ? "지도 화면 전체" : `~${RADIUS_STEPS[radiusIdx]}`}</Text>
-              </View>
-              <StepSlider steps={RADIUS_STEPS} value={radiusIdx} onChange={setRadiusIdx} />
-            </View>
+            <View style={S.sec}>{radiusSection}</View>
             <View style={S.sec}>
               {([
                 ["사용 가능한 충전소", available, setAvailable],
@@ -903,6 +1104,10 @@ const S = StyleSheet.create({
   sec: { marginBottom: 24 },
   secRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
   secTitle: { fontSize: 15, fontWeight: "600", color: "#222" },
+  secTitleOff: { color: "#ccc" },
+  secTitleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  textBtn: { fontSize: 15, color: "#999", fontWeight: "600" },
+  textBtnOn: { color: "#222" },
   secVal: { fontSize: 13, color: ACCENT, fontWeight: "600" },
   toggleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#f0f0f0" },
   toggleLbl: { fontSize: 15, color: "#333" },
