@@ -1,5 +1,7 @@
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Alert } from "react-native";
+import { router } from "expo-router";
 
 // ── 백엔드 주소 ────────────────────────────────────────────────
 // iOS 시뮬레이터: "http://127.0.0.1:8080"
@@ -20,8 +22,32 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+// ── 로그인 만료 처리 ────────────────────────────────────────────
+// 화면(마이페이지 등)이 로그아웃을 바로 반영하도록 알림을 받을 수 있게 함
+const logoutListeners = new Set<() => void>();
+export function onSessionExpired(listener: () => void) {
+  logoutListeners.add(listener);
+  return () => { logoutListeners.delete(listener); };
+}
+
+let expiredAlertShown = false;
+// 리프레시 토큰까지 만료 -> 로그아웃 (저장된 로그인 정보 삭제 + 안내 팝업 한 번)
+async function expireSession() {
+  const hadToken = await AsyncStorage.getItem("jwt_token");
+  await AsyncStorage.multiRemove(["jwt_token", "refresh_token", "user_name", "user_email"]);
+  logoutListeners.forEach((l) => l());
+  // 여러 요청이 동시에 실패해도 팝업은 한 번만, 원래 비로그인이었으면 띄우지 않음
+  if (!hadToken || expiredAlertShown) return;
+  expiredAlertShown = true;
+  Alert.alert("로그인이 만료됐어요", "다시 로그인해 주세요.", [
+    { text: "닫기", style: "cancel", onPress: () => { expiredAlertShown = false; } },
+    { text: "로그인", onPress: () => { expiredAlertShown = false; router.push("/login" as any); } },
+  ]);
+}
+
 let isRefreshing = false;
-let refreshQueue: Array<(token: string) => void> = [];
+// 재발급을 기다리는 요청들: 성공하면 새 토큰으로 다시 보내고, 실패하면 같이 실패 처리 (안 그러면 영원히 대기)
+let refreshQueue: Array<{ resolve: (token: string) => void; reject: (e: unknown) => void }> = [];
 
 api.interceptors.response.use(
   (response) => response,
@@ -32,13 +58,13 @@ api.interceptors.response.use(
       const refreshToken = await AsyncStorage.getItem("refresh_token");
 
       if (!refreshToken) {
-        await AsyncStorage.multiRemove(["jwt_token", "refresh_token"]);
+        await expireSession();
         return Promise.reject(error);
       }
 
       if (isRefreshing) {
-        return new Promise<string>((resolve) => {
-          refreshQueue.push(resolve);
+        return new Promise<string>((resolve, reject) => {
+          refreshQueue.push({ resolve, reject });
         }).then((newToken) => {
           original.headers.Authorization = `Bearer ${newToken}`;
           return api(original);
@@ -55,12 +81,15 @@ api.interceptors.response.use(
           ["jwt_token", newAccessToken],
           ["refresh_token", newRefreshToken ?? ""],
         ]);
-        refreshQueue.forEach((cb) => cb(newAccessToken));
+        refreshQueue.forEach(({ resolve }) => resolve(newAccessToken));
         refreshQueue = [];
         original.headers.Authorization = `Bearer ${newAccessToken}`;
         return api(original);
-      } catch {
-        await AsyncStorage.multiRemove(["jwt_token", "refresh_token"]);
+      } catch (refreshError: any) {
+        refreshQueue.forEach(({ reject }) => reject(error));
+        refreshQueue = [];
+        // 서버가 재발급을 거절했을 때만 로그아웃 (네트워크 오류면 토큰은 살아 있을 수 있어서 그대로 둠)
+        if (refreshError?.response) await expireSession();
         return Promise.reject(error);
       } finally {
         isRefreshing = false;

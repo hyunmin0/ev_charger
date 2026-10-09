@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Image,
 } from "react-native";
@@ -6,7 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import api from "@/lib/api";
+import api, { onSessionExpired } from "@/lib/api";
 import { requireLogin } from "@/lib/auth";
 import { unregisterPushToken } from "@/lib/push";
 
@@ -51,6 +51,13 @@ export default function MypageScreen() {
       })();
     }, [])
   );
+
+  // 로그인 만료로 로그아웃되면 지금 보고 있는 화면도 바로 비로그인 상태로
+  useEffect(() => onSessionExpired(() => {
+    setToken(null);
+    setProfile(null);
+    setProfileError(false);
+  }), []);
 
   const handleLogout = () => {
     Alert.alert("로그아웃", "로그아웃 하시겠어요?", [
