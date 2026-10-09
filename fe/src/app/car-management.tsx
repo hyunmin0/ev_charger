@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from "react";
 import {
-  View, Text, TouchableOpacity, StyleSheet, FlatList,
+  View, Text, TouchableOpacity, StyleSheet, FlatList, ScrollView,
   Modal, TextInput, Alert, ActivityIndicator,
   KeyboardAvoidingView, Platform,
 } from "react-native";
@@ -33,6 +33,7 @@ export default function CarManagementScreen() {
   const [keyword, setKeyword] = useState("");
   const [searchResults, setSearchResults] = useState<CarResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [noResult, setNoResult] = useState(false);
   const [selectedCar, setSelectedCar] = useState<CarResult | null>(null);
   const [batteryInput, setBatteryInput] = useState("");
   const [saving, setSaving] = useState(false);
@@ -51,12 +52,18 @@ export default function CarManagementScreen() {
 
   useFocusEffect(useCallback(() => { fetchCars(); }, [fetchCars]));
 
+  const carLabel = (car: CarResult) => `${car.brand} ${car.model}${car.trim ? " " + car.trim : ""}`;
+
   const searchCars = async () => {
-    if (!keyword.trim()) return;
+    // 차량을 고른 뒤 검색창엔 "브랜드 모델 트림"이 들어 있는데, be는 브랜드나 모델 하나에 포함되는지만 봄
+    // -> 그대로 검색하면 0건이라, 고른 차량 이름 그대로면 모델명으로 검색 (같은 모델의 다른 트림이 나옴)
+    const q = selectedCar && keyword === carLabel(selectedCar) ? selectedCar.model : keyword.trim();
+    if (!q) return;
     setSearching(true);
     try {
-      const res = await api.get<CarResult[]>("/cars", { params: { keyword: keyword.trim() } });
+      const res = await api.get<CarResult[]>("/cars", { params: { keyword: q } });
       setSearchResults(res.data ?? []);
+      setNoResult(!res.data?.length);
     } catch {
       Alert.alert("오류", "차량 검색에 실패했습니다.");
     } finally {
@@ -66,9 +73,11 @@ export default function CarManagementScreen() {
 
   const selectCar = (car: CarResult) => {
     setSelectedCar(car);
-    setBatteryInput(String(car.batteryCapacity));
+    // 배터리 용량은 비워 두고 차량 기본값을 placeholder로 보여줌 (안 바꾸면 기본값으로 저장)
+    setBatteryInput("");
     setSearchResults([]);
-    setKeyword(`${car.brand} ${car.model}${car.trim ? " " + car.trim : ""}`);
+    setNoResult(false);
+    setKeyword(carLabel(car));
   };
 
   const handleAdd = async () => {
@@ -76,7 +85,7 @@ export default function CarManagementScreen() {
       Alert.alert("입력 오류", "차량을 검색해서 선택해주세요.");
       return;
     }
-    const capacity = parseFloat(batteryInput);
+    const capacity = batteryInput.trim() ? parseFloat(batteryInput) : selectedCar.batteryCapacity;
     if (isNaN(capacity) || capacity <= 0) {
       Alert.alert("입력 오류", "배터리 용량을 올바르게 입력해주세요.");
       return;
@@ -120,6 +129,7 @@ export default function CarManagementScreen() {
     setKeyword("");
     setBatteryInput("");
     setSearchResults([]);
+    setNoResult(false);
     setSearchVisible(true);
   };
 
@@ -199,7 +209,7 @@ export default function CarManagementScreen() {
                 placeholder="브랜드 또는 모델명 입력"
                 placeholderTextColor="#bbb"
                 value={keyword}
-                onChangeText={v => { setKeyword(v); setSelectedCar(null); }}
+                onChangeText={v => { setKeyword(v); setSelectedCar(null); setNoResult(false); }}
                 onSubmitEditing={searchCars}
               />
               <TouchableOpacity style={S.searchBtn} onPress={searchCars}>
@@ -209,12 +219,17 @@ export default function CarManagementScreen() {
               </TouchableOpacity>
             </View>
 
+            {/* 결과가 많으면 상자 안에서 스크롤 (View에 maxHeight만 주면 항목이 상자 밖으로 삐져나옴) */}
             {searchResults.length > 0 && (
-              <View style={S.resultList}>
-                {searchResults.map(car => (
+              <ScrollView
+                style={S.resultList}
+                nestedScrollEnabled
+                keyboardShouldPersistTaps="handled"
+              >
+                {searchResults.map((car, i) => (
                   <TouchableOpacity
                     key={car.carId}
-                    style={S.resultItem}
+                    style={[S.resultItem, i === searchResults.length - 1 && { borderBottomWidth: 0 }]}
                     onPress={() => selectCar(car)}
                   >
                     <Text style={S.resultName}>
@@ -223,15 +238,17 @@ export default function CarManagementScreen() {
                     <Text style={S.resultSub}>{car.modelYear}년형 · {car.batteryCapacity}kWh</Text>
                   </TouchableOpacity>
                 ))}
-              </View>
+              </ScrollView>
             )}
+
+            {noResult && <Text style={S.noResult}>검색 결과가 없어요</Text>}
 
             {selectedCar && (
               <>
                 <Text style={[S.inputLabel, { marginTop: 16 }]}>배터리 용량 (kWh)</Text>
                 <TextInput
                   style={S.input}
-                  placeholder="예: 84"
+                  placeholder={String(selectedCar.batteryCapacity)}
                   placeholderTextColor="#bbb"
                   value={batteryInput}
                   onChangeText={setBatteryInput}
@@ -305,9 +322,10 @@ const S = StyleSheet.create({
     paddingHorizontal: 14, alignItems: "center", justifyContent: "center",
   },
   resultList: {
-    borderWidth: 1, borderColor: "#f0f0f0", borderRadius: 10,
-    maxHeight: 180, marginBottom: 8,
+    borderWidth: 1, borderColor: "#e8e8e8", borderRadius: 10,
+    maxHeight: 240, marginBottom: 8, overflow: "hidden", flexGrow: 0,
   },
+  noResult: { fontSize: 13, color: "#aaa", paddingVertical: 8, textAlign: "center" },
   resultItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: "#f5f5f5" },
   resultName: { fontSize: 14, fontWeight: "600", color: "#111" },
   resultSub: { fontSize: 12, color: "#888", marginTop: 2 },

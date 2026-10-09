@@ -124,7 +124,7 @@ class CarControllerTest {
     @Test
     void 차량_검색_성공시_200과_차량_목록을_반환한다() throws Exception {
         // given
-        given(carRepository.findByBrandContainingIgnoreCaseOrModelContainingIgnoreCase(KEYWORD, KEYWORD)).willReturn(cars);
+        given(carRepository.searchByName(KEYWORD)).willReturn(cars);
 
         // when
         mockMvc.perform(get("/cars")
@@ -140,13 +140,13 @@ class CarControllerTest {
                 .andExpect(jsonPath("$[1].carId").value(SECOND_CAR_ID))
                 .andExpect(jsonPath("$[1].model").value(SECOND_MODEL));
 
-        verify(carRepository).findByBrandContainingIgnoreCaseOrModelContainingIgnoreCase(KEYWORD, KEYWORD);
+        verify(carRepository).searchByName(KEYWORD);
     }
 
     @Test
     void 차량_검색시_trim이_없는_차량은_trim을_null로_반환한다() throws Exception {
         // given
-        given(carRepository.findByBrandContainingIgnoreCaseOrModelContainingIgnoreCase(KEYWORD, KEYWORD)).willReturn(cars);
+        given(carRepository.searchByName(KEYWORD)).willReturn(cars);
 
         // when
         mockMvc.perform(get("/cars")
@@ -157,13 +157,13 @@ class CarControllerTest {
                 .andExpect(jsonPath("$[0].trim").value(TRIM))
                 .andExpect(jsonPath("$[1].trim").isEmpty());
 
-        verify(carRepository).findByBrandContainingIgnoreCaseOrModelContainingIgnoreCase(KEYWORD, KEYWORD);
+        verify(carRepository).searchByName(KEYWORD);
     }
 
     @Test
     void 차량_검색시_검색_결과가_없으면_빈_리스트를_반환한다() throws Exception {
         // given
-        given(carRepository.findByBrandContainingIgnoreCaseOrModelContainingIgnoreCase(NOT_FOUND_KEYWORD, NOT_FOUND_KEYWORD)).willReturn(List.of());
+        given(carRepository.searchByName(NOT_FOUND_KEYWORD)).willReturn(List.of());
 
         // when
         mockMvc.perform(get("/cars")
@@ -174,7 +174,7 @@ class CarControllerTest {
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$").isEmpty());
 
-        verify(carRepository).findByBrandContainingIgnoreCaseOrModelContainingIgnoreCase(NOT_FOUND_KEYWORD, NOT_FOUND_KEYWORD);
+        verify(carRepository).searchByName(NOT_FOUND_KEYWORD);
     }
 
     @Test
@@ -185,6 +185,6 @@ class CarControllerTest {
                 // then
                 .andExpect(status().isBadRequest());
 
-        verify(carRepository, never()).findByBrandContainingIgnoreCaseOrModelContainingIgnoreCase(any(), any());
+        verify(carRepository, never()).searchByName(any());
     }
 }

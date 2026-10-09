@@ -18,12 +18,14 @@ public class CarController {
     private final ChargeRepository chargeRepository;
 
     // 차량 검색 (차량 추가 화면)
-    // input : keyword(String) - 브랜드 또는 모델명
+    // input : keyword(String) - 브랜드, 모델명, 트림 (예: "테슬라 Model Y")
     // output: List<CarResponse> { carId, brand, model, trim, modelYear, batteryCapacity }
     @GetMapping
     public ResponseEntity<List<CarResponse>> searchCars(@RequestParam String keyword) {
+        // 앞뒤 공백 제거, 여러 칸 공백은 한 칸으로 (이어 붙인 이름은 한 칸씩 띄워져 있음)
+        String normalized = keyword.trim().replaceAll("\\s+", " ");
         return ResponseEntity.ok(carRepository
-                .findByBrandContainingIgnoreCaseOrModelContainingIgnoreCase(keyword, keyword)
+                .searchByName(normalized)
                 .stream()
                 .map(CarResponse::from)
                 .toList());
