@@ -116,8 +116,10 @@ class UserCarControllerTest {
         auth = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
 
         userCarResponses = List.of(
-                new UserCarResponse(USER_CAR_ID, CAR_ID, CAR_NAME, BATTERY_CAPACITY),
-                new UserCarResponse(SECOND_USER_CAR_ID, SECOND_CAR_ID, SECOND_CAR_NAME, SECOND_BATTERY_CAPACITY)
+                new UserCarResponse(USER_CAR_ID, CAR_ID, CAR_NAME, BATTERY_CAPACITY,
+                        "롱레인지", 2025),
+                new UserCarResponse(SECOND_USER_CAR_ID, SECOND_CAR_ID, SECOND_CAR_NAME, SECOND_BATTERY_CAPACITY,
+                        null, 2026)
         );
     }
 
@@ -279,6 +281,8 @@ class UserCarControllerTest {
                 .andExpect(jsonPath("$[0].userCarId").value(USER_CAR_ID))
                 .andExpect(jsonPath("$[0].carName").value(CAR_NAME))
                 .andExpect(jsonPath("$[0].batteryCapacity").value(BATTERY_CAPACITY))
+                .andExpect(jsonPath("$[0].batteryType").value("롱레인지"))
+                .andExpect(jsonPath("$[0].modelYear").value(2025))
                 .andExpect(jsonPath("$[1].userCarId").value(SECOND_USER_CAR_ID))
                 .andExpect(jsonPath("$[1].carName").value(SECOND_CAR_NAME))
                 .andExpect(jsonPath("$[1].batteryCapacity").value(SECOND_BATTERY_CAPACITY));

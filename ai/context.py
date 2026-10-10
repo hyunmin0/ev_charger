@@ -19,11 +19,19 @@ _CONNECTORS_BY_CODE = {
 }
 
 
+# 차량 충전구가 받는 추가 커넥터: 국내 DC콤보(콤보1/CCS1) 충전구는 위쪽이 AC 5핀(J1772 Type1)이라
+# AC완속(02) 충전기 커넥터가 그대로 꽂힘
+_EXTRA_CAR_CONNECTORS = {
+    "콤보": {"AC완속"},
+}
+
+
 def expand_compatible_charger_types(car_codes: list[str]) -> list[str]:
     # car_charger에는 차량이 쓰는 커넥터가 코드 하나(예: 콤보=04)로만 들어있다.
     # 그런데 05·06·08·10 충전기에도 콤보 커넥터가 들어있어서 같은 차가 꽂을 수 있으므로,
     # 차량 커넥터와 하나라도 겹치는 충전기 코드를 전부 돌려준다.
     car_connectors = set().union(*(_CONNECTORS_BY_CODE.get(code, set()) for code in car_codes))
+    car_connectors |= set().union(*(_EXTRA_CAR_CONNECTORS.get(c, set()) for c in car_connectors))
     compatible = {code for code, connectors in _CONNECTORS_BY_CODE.items() if connectors & car_connectors}
     # 코드표에 없는 값은 사라지지 않게 그대로 유지
     compatible |= {code for code in car_codes if code not in _CONNECTORS_BY_CODE}

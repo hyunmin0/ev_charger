@@ -136,6 +136,8 @@ class UserCarServiceTest {
         Long userCarId = 1L;
         Car car = mock(Car.class);
         given(car.getDisplayName()).willReturn("현대 아이오닉5");
+        given(car.getModelYear()).willReturn(2025);
+        given(car.getBatteryType()).willReturn("롱레인지");
 
         UserCar userCar = mock(UserCar.class);
         given(userCar.getUserCarId()).willReturn(userCarId);
@@ -153,6 +155,27 @@ class UserCarServiceTest {
         assertThat(response.userCarId()).isEqualTo(userCarId);
         assertThat(response.carName()).isEqualTo("현대 아이오닉5");
         assertThat(response.batteryCapacity()).isEqualTo(77.4f);
+        assertThat(response.batteryType()).isEqualTo("롱레인지");
+        assertThat(response.modelYear()).isEqualTo(2025);
+    }
+
+    @Test
+    void 배터리_구분이_없는_차종은_batteryType이_null이다() {
+        // given: DB에는 배터리 구분이 없는 차종에 문자열 'None'이 들어 있음
+        Car car = mock(Car.class);
+        given(car.getBatteryType()).willReturn("None");
+
+        UserCar userCar = mock(UserCar.class);
+        given(userCar.getCar()).willReturn(car);
+        given(userCar.getBatteryCapacity()).willReturn(75f);
+
+        given(userCarRepository.findCarByUser(user)).willReturn(List.of(userCar));
+
+        // when
+        UserCarResponse response = userCarService.getUserCarList(user).get(0);
+
+        // then
+        assertThat(response.batteryType()).isNull();
     }
 
     @Test

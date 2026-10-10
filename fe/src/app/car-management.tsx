@@ -13,6 +13,8 @@ type UserCar = {
   userCarId: string; // UUID
   carName: string;
   batteryCapacity: number;
+  batteryType: string | null; // 롱레인지/스탠다드, 구분 없는 차종은 null
+  modelYear: number;
 };
 
 type CarResult = {
@@ -156,11 +158,16 @@ export default function CarManagementScreen() {
           contentContainerStyle={S.scroll}
           renderItem={({ item }) => (
             <View style={S.card}>
+              <Ionicons name="car-outline" size={28} color="#555" style={S.carIcon} />
               <View style={S.cardLeft}>
-                <Ionicons name="car-outline" size={36} color="#555" />
                 <Text style={S.carName}>{item.carName}</Text>
+                {item.batteryType && <Text style={S.carSub}>{item.batteryType}</Text>}
               </View>
               <View style={S.cardRight}>
+                <View style={S.specRow}>
+                  <Text style={S.specLabel}>연식</Text>
+                  <Text style={S.specValue}>{item.modelYear}년형</Text>
+                </View>
                 <View style={S.specRow}>
                   <Text style={S.specLabel}>배터리 용량</Text>
                   <Text style={S.specValue}>{item.batteryCapacity}kWh</Text>
@@ -291,12 +298,14 @@ const S = StyleSheet.create({
     flexDirection: "row", alignItems: "center",
     shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
   },
-  cardLeft: { alignItems: "center", width: 90, gap: 6, marginRight: 16 },
-  carName: { fontSize: 13, fontWeight: "700", color: "#111", textAlign: "center" },
-  cardRight: { flex: 1, gap: 6 },
-  specRow: { flexDirection: "row", justifyContent: "space-between" },
+  carIcon: { marginRight: 14 },
+  cardLeft: { flex: 1, gap: 4, marginRight: 12 },
+  carName: { fontSize: 15, fontWeight: "700", color: "#111" },
+  carSub: { fontSize: 12, color: "#999" },
+  cardRight: { width: 160, gap: 6 },
+  specRow: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
   specLabel: { fontSize: 12, color: "#888" },
-  specValue: { fontSize: 12, color: "#222", fontWeight: "600" },
+  specValue: { fontSize: 12, color: "#222", fontWeight: "600", flexShrink: 1, textAlign: "right" },
   deleteBtn: { position: "absolute", top: 10, right: 10 },
   addBtn: {
     backgroundColor: "#fff", borderRadius: 14, padding: 20,

@@ -50,17 +50,13 @@ public class UserCarService {
     /**
      * 차량 목록
      * @param user
-     * @return list(userCarId, carName, batteryCapacity)
+     * @return list(userCarId, carId, carName, batteryCapacity, batteryType, modelYear)
      */
     public List<UserCarResponse> getUserCarList(User user) {
         return userCarRepository.findCarByUser(user)
                 .stream()
-                .map(uc -> new UserCarResponse(
-                        uc.getUserCarId(),
-                        uc.getCar().getCarId(),
-                        uc.getCar().getDisplayName(),
-                        uc.getBatteryCapacity())
-                ).toList();
+                .map(UserCarResponse::from)
+                .toList();
     }
 
     /**
