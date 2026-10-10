@@ -294,7 +294,8 @@ const S = StyleSheet.create({
   headerTitle: { fontSize: 17, fontWeight: "700", color: "#111" },
   scroll: { padding: 16, gap: 10 },
   card: {
-    backgroundColor: "#fff", borderRadius: 14, padding: 18,
+    // 오른쪽은 위에 떠 있는 삭제 버튼(18px + 여백) 자리만큼 비움
+    backgroundColor: "#fff", borderRadius: 14, padding: 18, paddingRight: 38,
     flexDirection: "row", alignItems: "center",
     shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
   },
