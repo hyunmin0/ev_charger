@@ -172,6 +172,8 @@ export default function CalculatorScreen() {
   const targetMax = 80;
 
   const calculate = () => {
+    // 선택 안함이면 배터리 용량을 몰라서 계산하지 않음 (기본값으로 계산하면 어떤 차 기준인지 모르는 숫자가 나옴)
+    if (car === BASE_CARS[0].label) { setResult("차량을 선택해주세요."); return; }
     const capacity = carOptions.find(c => c.label === car)?.capacity ?? 64;
 
     if (isRefMode && selectedRef) {
