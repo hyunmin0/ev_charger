@@ -153,7 +153,11 @@ public class StationRepositoryImpl implements StationRepositoryCustom {
                     order by cg."predictedAt" desc
                     limit 1
                     ) cg on true -- 조인 조건이 없음을 의미
-            where ST_Within(s.location::geometry, ST_MakeEnvelope(:minLng, :minLat, :maxLng, :maxLat, 4326)) -- 위경도 최대최소 안에 존재하는 경우
+            -- 위경도 최대최소 안에 존재하는 경우
+            -- &&(geography)로 위치 인덱스(idx_station_location)를 타서 후보만 고른 뒤 ST_Within으로 정확히 거름
+            -- (::geometry 비교만 있으면 인덱스를 못 써서 전체 충전소를 훑음. &&만 쓰면 곡면 기준이라 범위가 조금 넓어짐)
+            where s.location && ST_MakeEnvelope(:minLng, :minLat, :maxLng, :maxLat, 4326)::geography
+              and ST_Within(s.location::geometry, ST_MakeEnvelope(:minLng, :minLat, :maxLng, :maxLat, 4326))
             """);
 
         // 공통 필터 조건

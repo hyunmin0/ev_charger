@@ -39,6 +39,16 @@ const REF_RANGE: Record<string, { fromSoc: number; toSoc: number }> = {
 
 type CarOption = { label: string; capacity: number; isMine?: boolean; carId?: number };
 type RefCharger = { chargerType: string; chargerOutput: number | null; minutes: number };
+// 안내 문구만 있거나(message), 계산 결과는 강조할 값(value)과 앞뒤 문장으로 나눔
+type CalcResult = { message: string } | { before: string; value: string; after: string };
+
+const DISCLAIMER = "실제 충전 시간은 차량 기종, 배터리 상태, 충전소에 따라 달라질 수 있습니다.";
+
+function formatDuration(totalMin: number): string {
+  if (totalMin < 60) return `${totalMin}분`;
+  const h = Math.floor(totalMin / 60), m = totalMin % 60;
+  return m > 0 ? `${h}시간 ${m}분` : `${h}시간`;
+}
 
 function refChargerLabel(c: RefCharger): string {
   if (c.chargerType === "급속" && c.chargerOutput != null) return `급속 DC (${c.chargerOutput}kW)`;
@@ -115,7 +125,7 @@ export default function CalculatorScreen() {
   const [mode, setMode] = useState<"target" | "time">("target");
   const [targetSoc, setTargetSoc] = useState(60);
   const [availableMin, setAvailableMin] = useState("");
-  const [result, setResult] = useState<string | null>(null);
+  const [result, setResult] = useState<CalcResult | null>(null);
 
   // 로그인된 경우 내 차 목록 상단에 추가
   // 탭 화면은 계속 마운트돼 있어서, 계정 탭에서 차량을 추가·삭제해도 반영되도록 들어올 때마다 다시 불러옴
@@ -173,7 +183,7 @@ export default function CalculatorScreen() {
 
   const calculate = () => {
     // 선택 안함이면 배터리 용량을 몰라서 계산하지 않음 (기본값으로 계산하면 어떤 차 기준인지 모르는 숫자가 나옴)
-    if (car === BASE_CARS[0].label) { setResult("차량을 선택해주세요."); return; }
+    if (car === BASE_CARS[0].label) { setResult({ message: "차량을 선택해주세요." }); return; }
     const capacity = carOptions.find(c => c.label === car)?.capacity ?? 64;
 
     if (isRefMode && selectedRef) {
@@ -182,40 +192,30 @@ export default function CalculatorScreen() {
       const refRange = ref.toSoc - ref.fromSoc;
 
       if (mode === "target") {
-        if (targetSoc <= soc) { setResult("목표 배터리가 현재 잔량보다 낮아요."); return; }
+        if (targetSoc <= soc) { setResult({ message: "목표 배터리가 현재 잔량보다 낮아요." }); return; }
         const totalMin = Math.round((targetSoc - soc) / refRange * selectedRef.minutes);
-        if (totalMin >= 60) {
-          const h = Math.floor(totalMin / 60), m = totalMin % 60;
-          setResult(`실제 충전 시간은 차량 기종, 배터리 상태, 충전소에 따라 달라질 수 있습니다.\n\n약 ${h}시간 ${m > 0 ? m + "분" : ""} 소요됩니다.`);
-        } else {
-          setResult(`실제 충전 시간은 차량 기종, 배터리 상태, 충전소에 따라 달라질 수 있습니다.\n\n약 ${totalMin}분 소요됩니다.`);
-        }
+        setResult({ before: "약 ", value: formatDuration(totalMin), after: " 소요됩니다." });
       } else {
         const mins = parseInt(availableMin);
-        if (!mins || mins <= 0) { setResult("충전 가능 시간을 입력해주세요."); return; }
+        if (!mins || mins <= 0) { setResult({ message: "충전 가능 시간을 입력해주세요." }); return; }
         // 기준 충전률(%/분) = 기준% / 기준시간
         const ratePerMin = refRange / selectedRef.minutes;
         const reachable = Math.min(Math.round(soc + ratePerMin * mins), targetMax);
-        setResult(`실제 충전 시간은 차량 기종, 배터리 상태, 충전소에 따라 달라질 수 있습니다.\n\n${mins}분 충전 시 약 ${reachable}%까지 충전 가능합니다.`);
+        setResult({ before: `${mins}분 충전 시 약 `, value: `${reachable}%`, after: "까지 충전 가능합니다." });
       }
     } else {
       // 기존 kW 공식 (BASE_CARS)
       if (mode === "target") {
-        if (targetSoc <= soc) { setResult("목표 배터리가 현재 잔량보다 낮아요."); return; }
+        if (targetSoc <= soc) { setResult({ message: "목표 배터리가 현재 잔량보다 낮아요." }); return; }
         const hours = ((targetSoc - soc) / 100) * capacity / charger.kw;
         const totalMin = Math.round(hours * 60);
-        if (totalMin >= 60) {
-          const h = Math.floor(totalMin / 60), m = totalMin % 60;
-          setResult(`실제 충전 시간은 차량 기종, 배터리 상태, 충전소에 따라 달라질 수 있습니다.\n\n약 ${h}시간 ${m > 0 ? m + "분" : ""} 소요됩니다.`);
-        } else {
-          setResult(`실제 충전 시간은 차량 기종, 배터리 상태, 충전소에 따라 달라질 수 있습니다.\n\n약 ${totalMin}분 소요됩니다.`);
-        }
+        setResult({ before: "약 ", value: formatDuration(totalMin), after: " 소요됩니다." });
       } else {
         const mins = parseInt(availableMin);
-        if (!mins || mins <= 0) { setResult("충전 가능 시간을 입력해주세요."); return; }
+        if (!mins || mins <= 0) { setResult({ message: "충전 가능 시간을 입력해주세요." }); return; }
         const addedPct = (mins / 60) * charger.kw / capacity * 100;
         const reachable = Math.min(Math.round(soc + addedPct), targetMax);
-        setResult(`실제 충전 시간은 차량 기종, 배터리 상태, 충전소에 따라 달라질 수 있습니다.\n\n${mins}분 충전 시 약 ${reachable}%까지 충전 가능합니다.`);
+        setResult({ before: `${mins}분 충전 시 약 `, value: `${reachable}%`, after: "까지 충전 가능합니다." });
       }
     }
   };
@@ -341,7 +341,18 @@ export default function CalculatorScreen() {
 
         {result && (
           <View style={s.resultCard}>
-            <Text style={s.resultText}>{result}</Text>
+            {"message" in result ? (
+              <Text style={s.resultText}>{result.message}</Text>
+            ) : (
+              <>
+                <Text style={s.resultMain}>
+                  {result.before}
+                  <Text style={s.resultValue}>{result.value}</Text>
+                  {result.after}
+                </Text>
+                <Text style={s.resultNote}>{DISCLAIMER}</Text>
+              </>
+            )}
           </View>
         )}
       </ScrollView>
@@ -391,6 +402,9 @@ const s = StyleSheet.create({
   timeInput: { marginTop: 10, borderWidth: 1, borderColor: "#e0e0e0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 13, fontSize: 16, backgroundColor: "#fff", color: "#222" },
   calcBtn: { backgroundColor: ACCENT, borderRadius: 14, height: 52, alignItems: "center", justifyContent: "center" },
   calcBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-  resultCard: { backgroundColor: "#FFF8E7", borderRadius: 14, padding: 16 },
+  resultCard: { backgroundColor: "#EBF3FF", borderRadius: 14, padding: 16 },
   resultText: { fontSize: 14, color: "#555", lineHeight: 22 },
+  resultNote: { fontSize: 12, color: "#8a94a6", lineHeight: 18, marginTop: 10 },
+  resultMain: { fontSize: 15, color: "#333", lineHeight: 28 },
+  resultValue: { fontSize: 22, fontWeight: "800", color: ACCENT },
 });

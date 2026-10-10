@@ -783,6 +783,26 @@ class StationRepositoryImplTest {
     }
 
     @Test
+    void 지도_영역_조회는_영역_경계_바로_밖_충전소를_넣지_않는다() {
+        // 을지로(경도 126.9910)는 동쪽 경계(126.9850)에서 약 500m 밖
+        // 위치 인덱스용 && 조건(곡면 기준)은 이 정도 크기의 영역에서 을지로까지 후보로 잡아서, ST_Within으로 다시 걸러야 함
+        MapBoundsRequest request = new MapBoundsRequest(
+                37.5400, 37.5900,
+                126.9400, 126.9850,
+                USER_LAT, USER_LNG,
+                StationFilter.empty());
+
+        // when
+        List<StationResponse> responses = stationRepository.findStationsInBoundsWithFilter(request, MAX_COUNT);
+
+        // then
+        assertThat(responses)
+                .extracting(StationResponse::statId)
+                .containsExactlyInAnyOrder(CITY_HALL_STAT_ID, DEOKSUGUNG_STAT_ID, GWANGHWAMUN_STAT_ID, CITY_HALL_EXIT_STAT_ID)
+                .doesNotContain(EULJIRO_STAT_ID);
+    }
+
+    @Test
     void 지도_영역_조회는_상한_안에서_유저_거리순으로_정렬한다() {
         // 영역 안 4곳(서울시청, 덕수궁, 시청역, 광화문) 중 화면 중심(위도 37.5710, 경도 126.9795)에서 가장 먼 덕수궁이 빠짐
         MapBoundsRequest request = new MapBoundsRequest(

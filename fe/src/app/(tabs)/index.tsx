@@ -139,27 +139,28 @@ html,body,#map { width:100%; height:100%; }
 .loc-pulse { position:absolute; width:60px; height:60px; border-radius:50%; background:rgba(74,144,226,0.2); }
 .loc-dot { width:14px; height:14px; border-radius:50%; background:#4A90E2; border:2.5px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,0.25); position:relative; z-index:1; }
 .st-pin-wrap { cursor:pointer; display:block; }
+.st-pin-wrap svg { display:block; filter:drop-shadow(0 1px 1.5px rgba(0,0,0,0.3)); }
 .rg { background:#fff; border:2px solid #5B9CF6; border-radius:14px; padding:5px 10px; text-align:center; box-shadow:0 1px 4px rgba(0,0,0,0.2); cursor:pointer; white-space:nowrap; font-family:sans-serif; }
 .rg b { display:block; font-size:13px; color:#222; }
 .rg span { font-size:11px; color:#555; }
-.rg i { font-style:normal; font-size:11px; color:#09AD12; margin-left:4px; }
+.rg i { font-style:normal; font-size:11px; color:#4CAF50; margin-left:4px; }
 </style>
 </head><body><div id="map"></div>
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_API_KEY}&autoload=false"></script>
 <script>
 function pinSVG(color) {
-  // 표시 크기 20x26 (path 좌표는 viewBox 26x34 기준)
-  return '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="26" viewBox="0 0 26 34">'
-    + '<path d="M13 0C5.82 0 0 5.82 0 13c0 9.75 13 21 13 21s13-11.25 13-21C26 5.82 20.18 0 13 0z" fill="' + color + '" stroke="rgba(255,255,255,0.85)" stroke-width="1.5"/>'
-    + '<circle cx="13" cy="12.5" r="5" fill="white"/>'
+  // 표시 크기 22x28 (path 좌표는 viewBox 28x36 기준), 가운데 번개 = 충전소
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="28" viewBox="0 0 28 36">'
+    + '<path d="M14 1.5C7.1 1.5 1.5 7 1.5 13.8c0 8.9 11.2 20.3 11.7 20.8.4.4 1.2.4 1.6 0 .5-.5 11.7-11.9 11.7-20.8C26.5 7 20.9 1.5 14 1.5z" fill="' + color + '" stroke="#fff" stroke-width="2"/>'
+    + '<path d="M15.4 6.8 9.8 14.6h3.9l-1.1 5.6 5.6-7.8h-3.9l1.1-5.6z" fill="#fff"/>'
     + '</svg>';
 }
+// 색은 즐겨찾기·상세 화면의 상태 색과 같게 맞춤
 function stationColor(s) {
-  if (s.availableCount > 0) return '#09AD12';
-  if (s.hasCharging) return '#EDA144';
-  if (s.allUnavailable) return '#EB0000';
-  if (s.allUnknown) return '#545050';
-  return '#545050';
+  if (s.availableCount > 0) return '#4CAF50';
+  if (s.hasCharging) return '#FF9800';
+  if (s.allUnavailable) return '#F44336';
+  return '#9E9E9E';
 }
 document.addEventListener('click', function(e) {
   var el = e.target;
