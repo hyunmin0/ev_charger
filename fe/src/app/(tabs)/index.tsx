@@ -883,7 +883,8 @@ export default function HomeScreen() {
       {mapCenter && (
         <WebView
           ref={webviewRef}
-          source={{ html: makeMapHTML(mapCenter.lat, mapCenter.lng), baseUrl: "http://localhost" }}
+          // 카카오 SDK가 페이지 프로토콜을 따라가서, http면 릴리스 빌드(cleartext 차단)에서 지도 본체를 못 받음
+          source={{ html: makeMapHTML(mapCenter.lat, mapCenter.lng), baseUrl: "https://localhost" }}
           style={StyleSheet.absoluteFill}
           originWhitelist={["*"]}
           javaScriptEnabled
