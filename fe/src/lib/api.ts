@@ -4,10 +4,9 @@ import { Alert } from "react-native";
 import { router } from "expo-router";
 
 // ── 백엔드 주소 ────────────────────────────────────────────────
-// iOS 시뮬레이터: "http://127.0.0.1:8080"
-// 실기기(같은 와이파이): "http://192.168.x.x:8080" ← 맥북 IP로 바꿔
-// 배포 후: "https://api.example.com"
-export const BACKEND_URL = "http://127.0.0.1:8080";
+// 릴리스 빌드: eas.json의 EXPO_PUBLIC_BACKEND_URL
+// 개발(값 없음): 127.0.0.1:8080 — 실기기는 adb reverse tcp:8080 tcp:8080
+export const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? "http://127.0.0.1:8080";
 
 const api = axios.create({
   baseURL: BACKEND_URL,
