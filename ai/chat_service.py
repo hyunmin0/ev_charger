@@ -35,21 +35,23 @@ def _stations_in_reply(reply: str | None, stations: list[Station]) -> list[Stati
     tool은 조건에 맞는 곳을 최대 10곳 주지만 답변은 그중 몇 곳만 추천하는 경우가 많아서,
     전부 카드로 내려가면 답변("2곳 추천")과 카드 수가 어긋남.
     - 긴 이름부터 찾고 찾은 부분은 지워서, "순천지사"가 "순천지사(공용)" 안에서 같이 잡히지 않게 함
+    - 이름이 같은 충전소가 여러 곳이면(예: 주소가 다른 "순천시청" 2곳) 답변에 나온 횟수만큼 tool 결과 순서(가까운 순)대로 남김
     - 이름이 하나도 안 나오면(요약형 답변 등) 원래 목록을 그대로 둠
     """
     text = _normalize_name(reply)
     if not text or not stations:
         return stations
 
-    found: list[tuple[int, Station]] = []
-    for station in sorted(stations, key=lambda s: len(_normalize_name(s.statNm)), reverse=True):
+    by_name: dict[str, list[Station]] = {}
+    for station in stations:
         name = _normalize_name(station.statNm)
-        if not name:
-            continue
-        index = text.find(name)
-        if index < 0:
-            continue
-        found.append((index, station))
+        if name:
+            by_name.setdefault(name, []).append(station)
+
+    found: list[tuple[int, Station]] = []
+    for name in sorted(by_name, key=len, reverse=True):
+        positions = [m.start() for m in re.finditer(re.escape(name), text)]
+        found.extend(zip(positions, by_name[name]))  # 짧은 쪽에 맞춰 짝지음
         text = text.replace(name, "\0" * len(name))  # 길이를 유지해서 다른 이름의 위치가 바뀌지 않게 함
 
     if not found:

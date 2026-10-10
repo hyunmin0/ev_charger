@@ -111,7 +111,8 @@ def build_charger_clause(
     params: dict = {}
 
     if available_only:
-        conditions.append("c.stat = '1'")       # '1' = 이용가능
+        # 환경공단 충전기 상태 코드: '2' = 충전대기(이용 가능), '1'은 통신이상 (be의 ChgerStat.WAITING과 같음)
+        conditions.append("c.stat = '2'")
 
     if charger_types:
         # 목록 중 하나라도 일치하면 매칭 (예: 차량이 DC콤보+AC완속을 둘 다 지원하면 둘 다 허용)
