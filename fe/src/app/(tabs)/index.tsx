@@ -273,22 +273,55 @@ function RangeSlider({ steps, minIdx, maxIdx, onMin, onMax }: {
   onMin: (i: number) => void; onMax: (i: number) => void;
 }) {
   const sw = TRACK_WIDTH / (steps.length - 1);
+  const wrapRef = useRef<View>(null);
+  const wrapPageX = useRef(0);
+  // PanResponder는 한 번만 만들어지므로 최신 값은 ref로 읽음
+  const latest = useRef({ minIdx, maxIdx, onMin, onMax });
+  latest.current = { minIdx, maxIdx, onMin, onMax };
+  // 이번 드래그에서 움직이는 손잡이 (양쪽이 같은 칸에 겹쳐 있으면 첫 이동 방향으로 정함)
+  const active = useRef<"min" | "max" | null>(null);
+
+  const stepAt = (pageX: number) =>
+    Math.max(0, Math.min(steps.length - 1, Math.round((pageX - wrapPageX.current) / sw)));
+
+  const moveTo = (i: number) => {
+    const { minIdx: lo, maxIdx: hi, onMin: setLo, onMax: setHi } = latest.current;
+    if (active.current === null) {
+      if (i === lo && i === hi) return;
+      active.current = i < lo ? "min" : i > hi ? "max" : Math.abs(i - lo) <= Math.abs(i - hi) ? "min" : "max";
+    }
+    // 손잡이끼리 넘어가지 않게 막음
+    if (active.current === "min" && i !== lo) setLo(Math.min(i, hi));
+    if (active.current === "max" && i !== hi) setHi(Math.max(i, lo));
+  };
+
+  const pan = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderTerminationRequest: () => false, // 드래그 중 바텀시트가 제스처를 가져가지 않게
+    onPanResponderGrant: (e) => {
+      active.current = null;
+      moveTo(stepAt(e.nativeEvent.pageX)); // 탭만 해도 가까운 손잡이가 그 칸으로 이동
+    },
+    onPanResponderMove: (e) => moveTo(stepAt(e.nativeEvent.pageX)),
+  })).current;
+
   return (
-    <View style={ss.wrap}>
+    <View
+      ref={wrapRef}
+      style={ss.wrap}
+      onLayout={() => wrapRef.current?.measure((_x, _y, _w, _h, pageX) => { wrapPageX.current = pageX; })}
+      {...pan.panHandlers}
+    >
       <View style={ss.trackBg} />
       <View style={[ss.trackFill, { left: minIdx * sw, width: (maxIdx - minIdx) * sw }]} />
       {steps.map((s, i) => {
         const inRange = i >= minIdx && i <= maxIdx;
         return (
-          <TouchableOpacity key={s} style={[ss.dotWrap, { left: i * sw - 18 }]}
-            onPress={() => {
-              const dMin = Math.abs(i - minIdx), dMax = Math.abs(i - maxIdx);
-              if (dMin < dMax) { if (i <= maxIdx) onMin(i); }
-              else { if (i >= minIdx) onMax(i); }
-            }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <View key={s} style={[ss.dotWrap, { left: i * sw - 18 }]} pointerEvents="none">
             <View style={[ss.dot, inRange && ss.dotOn]} />
             <Text style={[ss.lbl, inRange && ss.lblOn]} numberOfLines={1}>{s}</Text>
-          </TouchableOpacity>
+          </View>
         );
       })}
     </View>
