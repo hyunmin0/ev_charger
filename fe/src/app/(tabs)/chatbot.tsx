@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "@/lib/api";
 import { requireLogin } from "@/lib/auth";
@@ -31,6 +31,7 @@ const INITIAL_MSGS: Msg[] = [
 ];
 
 export default function ChatScreen() {
+  const router = useRouter();
   const [carList, setCarList] = useState<CarOption[]>([{ label: "선택 안함", carId: null }]);
   const [selectedCar, setSelectedCar] = useState<CarOption>({ label: "선택 안함", carId: null });
   const [dropVisible, setDropVisible] = useState(false);
@@ -116,7 +117,12 @@ export default function ChatScreen() {
   };
 
   const renderStation = (station: Station) => (
-    <View key={station.statId} style={s.stationCard}>
+    <TouchableOpacity
+      key={station.statId}
+      style={s.stationCard}
+      activeOpacity={0.7}
+      onPress={() => router.push(`/station/${station.statId}` as any)}
+    >
       <Text style={s.stationName} numberOfLines={1}>{station.statNm}</Text>
       <Text style={s.stationAddr} numberOfLines={1}>{station.addr}</Text>
       <View style={s.stationRow}>
@@ -125,7 +131,7 @@ export default function ChatScreen() {
           <View style={s.parkingBadge}><Text style={s.parkingTxt}>무료주차</Text></View>
         )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   return (

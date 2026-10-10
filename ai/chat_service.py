@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from openai import AsyncOpenAI
 
 import config
@@ -18,6 +19,42 @@ MAX_TOOL_ROUNDS = 3
 
 # 기본값(1.0)에서는 필요한 정보가 다 있는데도 tool을 안 부르고 되묻는 일이 잦았다 (충전 시간 질문 24/30 → 0.2에서 28/30)
 LLM_TEMPERATURE = 0.2
+
+
+# 이름 비교 때 무시할 문자 (LLM이 공백·괄호·가운뎃점을 빼거나 바꿔 쓰는 경우)
+_NAME_NOISE = re.compile(r"[\s()\[\]{}·.,/\-_'\"]")
+
+
+def _normalize_name(text: str) -> str:
+    return _NAME_NOISE.sub("", text or "")
+
+
+def _stations_in_reply(reply: str | None, stations: list[Station]) -> list[Station]:
+    """
+    tool이 돌려준 충전소 중 답변에 이름이 나온 것만, 답변에 나온 순서대로 남긴다.
+    tool은 조건에 맞는 곳을 최대 10곳 주지만 답변은 그중 몇 곳만 추천하는 경우가 많아서,
+    전부 카드로 내려가면 답변("2곳 추천")과 카드 수가 어긋남.
+    - 긴 이름부터 찾고 찾은 부분은 지워서, "순천지사"가 "순천지사(공용)" 안에서 같이 잡히지 않게 함
+    - 이름이 하나도 안 나오면(요약형 답변 등) 원래 목록을 그대로 둠
+    """
+    text = _normalize_name(reply)
+    if not text or not stations:
+        return stations
+
+    found: list[tuple[int, Station]] = []
+    for station in sorted(stations, key=lambda s: len(_normalize_name(s.statNm)), reverse=True):
+        name = _normalize_name(station.statNm)
+        if not name:
+            continue
+        index = text.find(name)
+        if index < 0:
+            continue
+        found.append((index, station))
+        text = text.replace(name, "\0" * len(name))  # 길이를 유지해서 다른 이름의 위치가 바뀌지 않게 함
+
+    if not found:
+        return stations
+    return [station for _, station in sorted(found, key=lambda f: f[0])]
 
 
 # schemas.py - ChatRequest, ChatResponse
@@ -53,7 +90,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
         # tool_calls가 없으면 바로 응답 반환
         if not assistant_message.tool_calls:
-            return ChatResponse(reply=assistant_message.content, stations=stations)
+            reply = assistant_message.content
+            return ChatResponse(reply=reply, stations=_stations_in_reply(reply, stations))
 
         # LLM이 tool을 부르기로 한 메시지를 messages에 추가
         messages.append(assistant_message)
@@ -94,7 +132,5 @@ async def chat(request: ChatRequest) -> ChatResponse:
         messages=messages,
     )
 
-    return ChatResponse(
-        reply=final_response.choices[0].message.content,
-        stations=stations,
-    )
+    reply = final_response.choices[0].message.content
+    return ChatResponse(reply=reply, stations=_stations_in_reply(reply, stations))
