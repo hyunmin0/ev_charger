@@ -2,6 +2,7 @@ package ev_charger.be.chat;
 
 import ev_charger.be.chat.dto.request.ChatRequest;
 import ev_charger.be.chat.dto.response.ChatResponse;
+import ev_charger.be.chat.dto.response.ChatUsageResponse;
 import ev_charger.be.security.CustomUserDetails;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -16,13 +17,20 @@ public class ChatController {
 
     private final ChatService chatService;
 
-    // 챗봇 질문 (로그인 필요)
+    // 챗봇 질문 (로그인 필요, 하루 질문 수 제한 - 초과 시 429)
     // input : ChatRequest { carId, message, history[{role, content}], lat, lng }
-    // output: ChatResponse { reply, stations[{statId, statNm, addr, parkingFree, distance_km}] }
+    // output: ChatResponse { reply, stations[{statId, statNm, addr, parkingFree, distance_km}], remainingToday }
     @PostMapping
     public ResponseEntity<ChatResponse> chat(
             @AuthenticationPrincipal CustomUserDetails userDetails, // 로그인한 유저
             @Valid @RequestBody ChatRequest request) {
         return ResponseEntity.ok(chatService.chat(userDetails.getUser(), request));
+    }
+
+    // 오늘 챗봇 질문 사용량 (로그인 필요)
+    // output: ChatUsageResponse { limit, used, remaining }
+    @GetMapping("/usage")
+    public ResponseEntity<ChatUsageResponse> usage(@AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(chatService.usage(userDetails.getUser()));
     }
 }

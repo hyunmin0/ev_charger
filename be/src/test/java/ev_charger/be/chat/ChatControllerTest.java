@@ -4,7 +4,9 @@ import ev_charger.be.chat.dto.request.ChatMessage;
 import ev_charger.be.chat.dto.request.ChatRequest;
 import ev_charger.be.chat.dto.response.ChatResponse;
 import ev_charger.be.chat.dto.response.ChatStation;
+import ev_charger.be.chat.dto.response.ChatUsageResponse;
 import ev_charger.be.common.exception.InternalServerException;
+import ev_charger.be.common.exception.TooManyRequestsException;
 import ev_charger.be.config.SecurityConfig;
 import ev_charger.be.security.CustomUserDetails;
 import ev_charger.be.security.CustomUserDetailsService;
@@ -34,6 +36,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -94,14 +97,15 @@ class ChatControllerTest {
     @Test
     void 정상_요청이면_로그인_유저와_요청_내용으로_서비스를_호출하고_응답을_내려준다() throws Exception {
         given(chatService.chat(any(), any())).willReturn(new ChatResponse("추천해요",
-                List.of(new ChatStation("SE000014", "서울시 본관청사", "서울 중구", "Y", 0.3))));
+                List.of(new ChatStation("SE000014", "서울시 본관청사", "서울 중구", "Y", 0.3)), 7));
 
         send(VALID_BODY, true)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reply").value("추천해요"))
                 .andExpect(jsonPath("$.stations[0].statId").value("SE000014"))
                 .andExpect(jsonPath("$.stations[0].parkingFree").value("Y"))
-                .andExpect(jsonPath("$.stations[0].distance_km").value(0.3));
+                .andExpect(jsonPath("$.stations[0].distance_km").value(0.3))
+                .andExpect(jsonPath("$.remainingToday").value(7));
 
         verify(chatService).chat(user, new ChatRequest(5L, "근처 충전소 알려줘",
                 List.of(new ChatMessage("user", "안녕"), new ChatMessage("assistant", "안녕하세요")), 37.5665, 126.978));
@@ -172,5 +176,33 @@ class ChatControllerTest {
         send(VALID_BODY, true)
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.message").value("챗봇이 지금 응답하지 못하고 있어요. 잠시 후 다시 시도해 주세요."));
+    }
+
+    @Test
+    void 오늘_질문_수를_다_쓰면_429와_메시지() throws Exception {
+        given(chatService.chat(any(), any()))
+                .willThrow(new TooManyRequestsException("오늘 챗봇 질문 10회를 모두 사용했어요. 내일 다시 이용해 주세요."));
+
+        send(VALID_BODY, true)
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.message").value("오늘 챗봇 질문 10회를 모두 사용했어요. 내일 다시 이용해 주세요."));
+    }
+
+    @Test
+    void 사용량_조회는_로그인_유저의_사용량을_내려준다() throws Exception {
+        given(chatService.usage(user)).willReturn(new ChatUsageResponse(10, 3, 7));
+
+        mockMvc.perform(get("/chat/usage").with(authentication(auth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.limit").value(10))
+                .andExpect(jsonPath("$.used").value(3))
+                .andExpect(jsonPath("$.remaining").value(7));
+    }
+
+    @Test
+    void 사용량_조회도_로그인하지_않으면_401() throws Exception {
+        mockMvc.perform(get("/chat/usage")).andExpect(status().isUnauthorized());
+
+        verify(chatService, never()).usage(any());
     }
 }

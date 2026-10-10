@@ -4,6 +4,8 @@ import ev_charger.be.chat.dto.request.AiChatRequest;
 import ev_charger.be.chat.dto.request.ChatMessage;
 import ev_charger.be.chat.dto.request.ChatRequest;
 import ev_charger.be.chat.dto.response.ChatResponse;
+import ev_charger.be.chat.dto.response.ChatUsageResponse;
+import ev_charger.be.common.exception.TooManyRequestsException;
 import ev_charger.be.user.User;
 import ev_charger.be.user.userCar.UserCarRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,11 +23,14 @@ public class ChatService {
 
     private final UserCarRepository userCarRepository;
     private final AiChatClient aiChatClient;
+    private final ChatUsageLimiter chatUsageLimiter;
 
     /**
      * 챗봇 질문을 AI 서버에 전달
      * user_id는 로그인한 유저에서 가져오고, car_id는 그 유저의 차량인지 확인한 뒤에만 넘김
+     * 하루 질문 수는 요청 검증을 통과한 뒤 차감하고, AI 응답을 받지 못하면 되돌림
      * @throws IllegalArgumentException 내 차량이 아닌 carId
+     * @throws TooManyRequestsException 오늘 질문 수를 다 쓴 경우 (AI를 호출하지 않음)
      */
     public ChatResponse chat(User user, ChatRequest request) {
         Long carId = request.carId();
@@ -38,7 +43,19 @@ public class ChatService {
             history = history.subList(history.size() - MAX_HISTORY_MESSAGES, history.size());
         }
 
-        return aiChatClient.chat(new AiChatRequest(
-                user.getUserId(), carId, request.message(), history, request.lat(), request.lng()));
+        ChatUsageLimiter.Reservation reservation = chatUsageLimiter.acquire(user.getUserId());
+        try {
+            ChatResponse response = aiChatClient.chat(new AiChatRequest(
+                    user.getUserId(), carId, request.message(), history, request.lat(), request.lng()));
+            return response.withRemainingToday(reservation.remaining());
+        } catch (RuntimeException e) {
+            chatUsageLimiter.release(reservation);
+            throw e;
+        }
+    }
+
+    public ChatUsageResponse usage(User user) {
+        int used = chatUsageLimiter.used(user.getUserId());
+        return new ChatUsageResponse(ChatUsageLimiter.DAILY_LIMIT, used, ChatUsageLimiter.DAILY_LIMIT - used);
     }
 }

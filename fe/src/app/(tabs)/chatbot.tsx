@@ -13,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
 import api from "@/lib/api";
 import { requireLogin } from "@/lib/auth";
 
@@ -21,6 +22,8 @@ const ACCENT = "#5B9CF6";
 type Station = { statId: string; statNm: string; addr: string; parkingFree: string; distance_km: number | null };
 type Msg = { id: string; role: "user" | "bot"; text: string; stations?: Station[] };
 type CarOption = { label: string; carId: number | null };
+// 오늘(자정 초기화) 챗봇 질문 사용량. 비로그인이거나 못 불러오면 null
+type Usage = { limit: number; remaining: number };
 
 const INITIAL_MSGS: Msg[] = [
   {
@@ -38,7 +41,9 @@ export default function ChatScreen() {
   const [msgs, setMsgs] = useState<Msg[]>([...INITIAL_MSGS]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [usage, setUsage] = useState<Usage | null>(null);
   const flatListRef = useRef<FlatList>(null);
+  const limitReached = usage?.remaining === 0;
 
   // 탭 화면은 계속 마운트돼 있어서, 계정 탭에서 차량을 추가·삭제해도 반영되도록 들어올 때마다 다시 불러옴
   useFocusEffect(
@@ -57,6 +62,19 @@ export default function ChatScreen() {
           // 차량 목록 못 불러와도 계속 진행
         }
       })();
+      // 들어올 때마다 다시 불러와서 자정 초기화와 로그인·로그아웃을 반영
+      (async () => {
+        if (!(await AsyncStorage.getItem("jwt_token"))) {
+          setUsage(null);
+          return;
+        }
+        try {
+          const res = await api.get("/chat/usage");
+          setUsage({ limit: res.data.limit, remaining: res.data.remaining });
+        } catch {
+          setUsage(null);
+        }
+      })();
       // 다른 탭으로 옮기면 열려 있던 차량 선택 드롭다운을 닫음 (탭 화면은 마운트된 채로 남아서 돌아오면 열려 있음)
       return () => setDropVisible(false);
     }, [])
@@ -64,7 +82,7 @@ export default function ChatScreen() {
 
   const send = async () => {
     const text = input.trim();
-    if (!text || loading) return;
+    if (!text || loading || limitReached) return;
     if (!(await requireLogin())) return;
 
     const stored = await AsyncStorage.getItem("mapLocation");
@@ -105,11 +123,20 @@ export default function ChatScreen() {
         stations: res.data.stations?.length > 0 ? res.data.stations : undefined,
       };
       setMsgs(prev => [...prev, botMsg]);
-    } catch {
+      const remaining = res.data.remainingToday;
+      if (typeof remaining === "number") {
+        setUsage(prev => ({ limit: prev?.limit ?? remaining, remaining }));
+      }
+    } catch (e) {
+      // 429: 오늘 질문 수를 다 씀 (be가 보낸 안내 문구를 그대로 보여줌)
+      const limited = axios.isAxiosError(e) && e.response?.status === 429;
+      if (limited) setUsage(prev => (prev ? { ...prev, remaining: 0 } : prev));
       setMsgs(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: "bot",
-        text: "죄송해요, 응답을 받지 못했어요. 다시 시도해주세요.",
+        text: limited
+          ? (e.response?.data?.message ?? "오늘 질문 횟수를 모두 사용했어요. 내일 다시 이용해 주세요.")
+          : "죄송해요, 응답을 받지 못했어요. 다시 시도해주세요.",
       }]);
     } finally {
       setLoading(false);
@@ -223,21 +250,33 @@ export default function ChatScreen() {
           }
         />
 
+        {/* 오늘 남은 질문 수 */}
+        {usage && (
+          <View style={s.usageRow}>
+            <Text style={[s.usageText, limitReached && s.usageTextOff]}>
+              {limitReached
+                ? "오늘 질문을 모두 사용했어요. 자정에 초기화돼요."
+                : `오늘 남은 질문 ${usage.remaining}/${usage.limit}회`}
+            </Text>
+          </View>
+        )}
+
         {/* 입력바 */}
-        <View style={s.inputRow}>
+        <View style={[s.inputRow, usage && s.inputRowUnderUsage]}>
           <TextInput
             style={s.input}
             value={input}
             onChangeText={setInput}
-            placeholder="채팅을 입력하세요."
+            placeholder={limitReached ? "내일 다시 질문할 수 있어요." : "채팅을 입력하세요."}
             placeholderTextColor="#bbb"
+            editable={!limitReached}
             multiline
             returnKeyType="default"
           />
           <TouchableOpacity
-            style={[s.sendBtn, (!input.trim() || loading) && s.sendBtnOff]}
+            style={[s.sendBtn, (!input.trim() || loading || limitReached) && s.sendBtnOff]}
             onPress={send}
-            disabled={!input.trim() || loading}
+            disabled={!input.trim() || loading || limitReached}
           >
             <Ionicons name="arrow-up" size={20} color="#fff" />
           </TouchableOpacity>
@@ -339,6 +378,17 @@ const s = StyleSheet.create({
   stationDist: { fontSize: 12, color: ACCENT, fontWeight: "600" },
   parkingBadge: { backgroundColor: "#EBF3FF", borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
   parkingTxt: { fontSize: 11, color: ACCENT },
+  usageRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    backgroundColor: "#fff",
+    borderTopWidth: 1,
+    borderTopColor: "#ececec",
+  },
+  usageText: { fontSize: 12, color: "#888", textAlign: "right" },
+  usageTextOff: { color: "#E5534B" },
+  // 남은 질문 줄과 입력바를 한 덩어리로 보이게 (구분선은 남은 질문 줄 위에만)
+  inputRowUnderUsage: { borderTopWidth: 0, paddingTop: 4 },
   inputRow: {
     flexDirection: "row",
     alignItems: "flex-end",
